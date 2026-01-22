@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Lock, Home, Eye, EyeOff, Mail, KeyRound, Loader2, ArrowLeft } from "lucide-react"
+import { AlertCircle, Lock, Home, Eye, EyeOff, Mail, KeyRound, Loader2, ArrowLeft, Shield } from "lucide-react"
 
 export default function EnhancedLoginPage() {
   const router = useRouter()
@@ -53,43 +53,55 @@ export default function EnhancedLoginPage() {
         return
     }
 
+    if (!validateEmail(email)) {
+        setError("Please enter a valid email address")
+        return
+    }
+
     setIsLoading(true)
 
     try {
+        // ✅ Call your Spring Boot backend with BCrypt password verification
         const response = await fetch('http://localhost:8080/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
+            body: JSON.stringify({ 
+                email, 
+                password // ✅ Send raw password - backend will verify with BCrypt
+            })
+        })
 
         if (!response.ok) {
-            throw new Error("Invalid email or password");
+            const errorText = await response.text()
+            throw new Error(errorText || "Invalid email or password")
         }
 
-        const userData = await response.json();
+        const userData = await response.json()
 
-        // CRITICAL: Store the real UUID from PostgreSQL
+        // ✅ Store user session data
         const sessionData = {
-            id: userData.id, // This is the UUID like '482b53eb...'
+            id: userData.id,
             email: userData.email,
             fullName: userData.fullName,
-            plan: "free",
             loginTime: new Date().toISOString(),
         }
 
+        // ✅ Remember me functionality
         if (rememberMe) {
             localStorage.setItem("user", JSON.stringify(sessionData))
         } else {
             sessionStorage.setItem("user", JSON.stringify(sessionData))
         }
 
+        // ✅ Redirect to dashboard
         router.push("/dashboard")
-    } catch (err) {
-        setError("Invalid email or password")
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : "Invalid email or password"
+        setError(errorMessage)
     } finally {
         setIsLoading(false)
     }
-}
+  }
 
   const handleForgotPassword = async () => {
     if (!resetEmail || !validateEmail(resetEmail)) {
@@ -101,14 +113,14 @@ export default function EnhancedLoginPage() {
     setError("")
 
     try {
-      // TODO: Connect to Spring Boot backend
-      // const response = await fetch('/api/auth/forgot-password', {
+      // TODO: Connect to Spring Boot backend for password reset
+      // const response = await fetch('http://localhost:8080/api/auth/forgot-password', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({ email: resetEmail })
       // })
 
-      // Simulate API call
+      // Simulate API call for now
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
       setResetEmailSent(true)
@@ -381,11 +393,13 @@ export default function EnhancedLoginPage() {
           </div>
         </Card>
 
-        {/* Demo Notice */}
+        {/* Security Notice */}
         <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-border backdrop-blur-sm animate-in fade-in slide-in-from-bottom duration-700">
-          <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">Demo Mode:</span> Enter any email and password to proceed to
-            the dashboard.
+          <p className="text-sm text-muted-foreground flex items-start gap-2">
+            <Shield className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+            <span>
+              <span className="font-semibold text-foreground">Secure Login:</span> Your password is verified using BCrypt encryption. We never store passwords in plain text.
+            </span>
           </p>
         </div>
 
