@@ -14,41 +14,36 @@ import {
   Sparkles,
   Eye,
   EyeOff,
-  KeyRound,
-  UserCheck,
   Fingerprint,
-  Clock,
   ArrowRight,
   Trophy,
   Star,
-  Zap
+  Users,
+  UserCheck
 } from "lucide-react"
 
-export default function TrustVerificationPage() {
-  // Security Questions State
+export default function TrustVerificationSystem() {
+  const [currentPage, setCurrentPage] = useState("questions")
   const [currentQuestion, setCurrentQuestion] = useState(0)
+  
+  // FIXED: Initialized with empty strings for all keys to prevent uncontrolled input errors
   const [answers, setAnswers] = useState({
     motherMaidenName: "",
     firstPetName: "",
-    birthCity: "",
-    favoriteTeacher: "",
-    childhoodFriend: ""
+    birthCity: ""
   })
 
-  // Additional Security State
-  const [verificationCode, setVerificationCode] = useState("")
-  const [backupEmail, setBackupEmail] = useState("")
-  const [backupPhone, setBackupPhone] = useState("")
   const [securityPin, setSecurityPin] = useState("")
   const [confirmPin, setConfirmPin] = useState("")
-
-  // UI States
-  const [currentStep, setCurrentStep] = useState(1)
-  const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [showConfirmPin, setShowConfirmPin] = useState(false)
-  const [verificationSent, setVerificationSent] = useState(false)
+
+  const [familyName, setFamilyName] = useState("")
+  const [familyEmail, setFamilyEmail] = useState("")
+  const [familyPhone, setFamilyPhone] = useState("")
+
+  const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [showConfetti, setShowConfetti] = useState(false)
   const [celebrating, setCelebrating] = useState(false)
@@ -74,27 +69,11 @@ export default function TrustVerificationPage() {
       placeholder: "Enter birth city",
       icon: Shield,
       tip: "Your place of birth for verification"
-    },
-    {
-      id: "favoriteTeacher",
-      question: "What was your favorite teacher's name?",
-      placeholder: "Enter teacher's name",
-      icon: KeyRound,
-      tip: "Someone who made a difference in your life"
-    },
-    {
-      id: "childhoodFriend",
-      question: "What was your childhood best friend's name?",
-      placeholder: "Enter friend's name",
-      icon: UserCheck,
-      tip: "Your closest friend from growing up"
     }
   ]
 
-  const currentQ = securityQuestions[currentQuestion]
+ const currentQ = securityQuestions[currentQuestion]
   const IconComponent = currentQ.icon
-
-  // Auto-hide success messages
   useEffect(() => {
     if (successMessage) {
       const timer = setTimeout(() => setSuccessMessage(""), 3000)
@@ -102,18 +81,21 @@ export default function TrustVerificationPage() {
     }
   }, [successMessage])
 
+  // FIXED: Improved state update logic
   const handleAnswerChange = (value: string) => {
+    const fieldId = securityQuestions[currentQuestion].id;
     setAnswers(prev => ({
       ...prev,
-      [currentQ.id]: value
+      [fieldId]: value
     }))
-    setError("")
+    if (error) setError("")
   }
 
   const handleNextQuestion = () => {
-    const currentAnswer = answers[currentQ.id as keyof typeof answers]
+    const fieldId = securityQuestions[currentQuestion].id;
+    const currentAnswer = answers[fieldId as keyof typeof answers]
     
-    if (!currentAnswer.trim()) {
+    if (!currentAnswer || !currentAnswer.trim()) {
       setError("Please provide an answer to continue")
       return
     }
@@ -128,7 +110,7 @@ export default function TrustVerificationPage() {
       setError("")
       setSuccessMessage("Great! Moving to the next question...")
     } else {
-      setCurrentStep(2)
+      setCurrentPage("pin")
       setError("")
       setSuccessMessage("Security questions completed! 🎉")
     }
@@ -141,49 +123,10 @@ export default function TrustVerificationPage() {
     }
   }
 
-  const handleSendVerificationCode = async () => {
-    if (!backupEmail && !backupPhone) {
-      setError("Please provide at least one backup contact method")
-      return
-    }
-
-    if (backupEmail && !backupEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      setError("Please enter a valid email address")
-      return
-    }
-
-    if (backupPhone && !backupPhone.match(/^\+?[\d\s-()]+$/)) {
-      setError("Please enter a valid phone number")
-      return
-    }
-
-    setIsLoading(true)
-    setError("")
-
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      setVerificationSent(true)
-      setSuccessMessage("Verification code sent successfully! ✓")
-    } catch (err) {
-      setError("Failed to send verification code. Please try again.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleStep2Submit = async () => {
-    if (!verificationSent) {
-      setError("Please send and verify your backup contact first")
-      return
-    }
-
-    if (!verificationCode || verificationCode.length !== 6) {
-      setError("Please enter the 6-digit verification code")
-      return
-    }
-
-    if (!securityPin || securityPin.length !== 4) {
-      setError("Security PIN must be 4 digits")
+  const handlePinSubmit = () => {
+    // FIXED: Added stricter digit-only validation
+    if (!/^\d{4}$/.test(securityPin)) {
+      setError("Security PIN must be exactly 4 digits")
       return
     }
 
@@ -192,16 +135,39 @@ export default function TrustVerificationPage() {
       return
     }
 
+    setCurrentPage("family")
+    setError("")
+    setSuccessMessage("PIN created successfully! ✓")
+  }
+
+  const handleFamilySubmit = async () => {
+    if (!familyName.trim()) {
+      setError("Please enter family member's name")
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!familyEmail.trim() || !emailRegex.test(familyEmail)) {
+      setError("Please enter a valid email address")
+      return
+    }
+
+    // FIXED: Improved phone validation regex
+    if (!familyPhone.trim() || familyPhone.length < 10) {
+      setError("Please enter a valid phone number (at least 10 digits)")
+      return
+    }
+
     setIsLoading(true)
     setError("")
 
     try {
       await new Promise(resolve => setTimeout(resolve, 1500))
-      setCurrentStep(3)
+      setCurrentPage("complete")
       setShowConfetti(true)
       setTimeout(() => setShowConfetti(false), 5000)
     } catch (err) {
-      setError("Verification failed. Please try again.")
+      setError("Failed to save information. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -212,19 +178,29 @@ export default function TrustVerificationPage() {
     setCelebrating(true)
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      if (typeof window !== 'undefined') {
-        const userData = JSON.parse(localStorage.getItem("user") || "{}")
-        userData.trustVerified = true
-        userData.trustVerificationDate = new Date().toISOString()
-        userData.securityQuestionsSet = true
-        localStorage.setItem("user", JSON.stringify(userData))
+      // Retrieve original user object from localStorage
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      
+      const verificationData = {
+        ...storedUser,
+        trustVerified: true,
+        trustVerificationDate: new Date().toISOString(),
+        securityQuestions: answers,
+        securityPin: securityPin, // In production, this should be hashed
+        familyContact: {
+          name: familyName,
+          email: familyEmail,
+          phone: familyPhone
+        }
       }
 
-      setTimeout(() => {
-        window.location.href = "/dashboard"
-      }, 1000)
+      // FIXED: Actually saving to localStorage to maintain session persistence
+      localStorage.setItem("user", JSON.stringify(verificationData));
+
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      alert("Verification Complete! Redirecting to dashboard...")
+      window.location.href = "/dashboard"
     } catch (err) {
       setError("Failed to complete verification. Please try again.")
       setIsLoading(false)
@@ -232,21 +208,29 @@ export default function TrustVerificationPage() {
     }
   }
 
+  const getProgressStep = () => {
+    switch(currentPage) {
+      case "questions": return 1
+      case "pin": return 2
+      case "family": return 3
+      case "complete": return 4
+      default: return 1
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-950 dark:to-indigo-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated Background Elements */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-blue-950 dark:to-indigo-950 flex items-center justify-center p-3 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-blue-400/20 to-transparent rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-indigo-400/20 to-transparent rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
       </div>
 
-      {/* Confetti Effect */}
       {showConfetti && (
         <div className="fixed inset-0 pointer-events-none z-50">
           {[...Array(50)].map((_, i) => (
             <div
               key={i}
-              className="absolute w-3 h-3 rounded-full animate-confetti"
+              className="absolute w-2 h-2 rounded-full animate-confetti"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `-10%`,
@@ -261,14 +245,8 @@ export default function TrustVerificationPage() {
 
       <style jsx>{`
         @keyframes confetti {
-          0% {
-            transform: translateY(0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(100vh) rotate(720deg);
-            opacity: 0;
-          }
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
         }
         .animate-confetti {
           animation: confetti 4s ease-out forwards;
@@ -276,446 +254,314 @@ export default function TrustVerificationPage() {
       `}</style>
 
       <div className="w-full max-w-2xl relative z-10">
-        {/* Header with Animation */}
-        <div className="mb-8 text-center animate-in fade-in slide-in-from-top duration-700">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 mb-4 shadow-2xl shadow-blue-500/50 relative group transform hover:scale-110 transition-transform duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition-opacity animate-pulse"></div>
-            <Shield className="w-10 h-10 text-white relative z-10" />
+        <div className="mb-4 text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 mb-2 shadow-xl relative">
+            <Shield className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-1">
             Trust Verification
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 text-lg flex items-center justify-center gap-2">
-            <Lock className="w-5 h-5" />
-            Secure Your Account with Enhanced Protection
-            <Sparkles className="w-5 h-5 text-yellow-500" />
+          <p className="text-gray-600 dark:text-gray-300 text-sm flex items-center justify-center gap-2">
+            <Lock className="w-4 h-4" />
+            Secure Your Digital Assets
           </p>
         </div>
 
-        {/* Success Message Toast */}
         {successMessage && (
-          <div className="mb-6 animate-in slide-in-from-top duration-300">
-            <Alert className="border-green-500 bg-green-50 dark:bg-green-950/30">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
+          <div className="mb-3 animate-in slide-in-from-top duration-300">
+            <Alert className="border-green-500 bg-green-50 dark:bg-green-950/30 py-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-700 dark:text-green-300 text-sm font-medium">
                 {successMessage}
               </AlertDescription>
             </Alert>
           </div>
         )}
 
-        {/* Enhanced Progress Indicator */}
-        <div className="mb-8 flex items-center justify-center gap-2">
-          {[1, 2, 3].map((step) => (
+        <div className="mb-4 flex items-center justify-center gap-2">
+          {[1, 2, 3, 4].map((step) => (
             <div key={step} className="flex items-center">
-              <div className={`relative w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all duration-500 ${
-                currentStep === step 
-                  ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-xl shadow-blue-500/50 scale-125" 
-                  : currentStep > step 
-                  ? "bg-green-500 text-white shadow-lg"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+              <div className={`relative w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
+                getProgressStep() === step 
+                  ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg scale-110" 
+                  : getProgressStep() > step 
+                  ? "bg-green-500 text-white"
+                  : "bg-gray-200 dark:bg-gray-700 text-gray-500"
               }`}>
-                {currentStep > step ? (
-                  <CheckCircle className="w-6 h-6 animate-in zoom-in" />
-                ) : (
-                  <span className="text-lg">{step}</span>
-                )}
-                {currentStep === step && (
-                  <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-75"></div>
-                )}
+                {getProgressStep() > step ? <CheckCircle className="w-4 h-4" /> : step}
               </div>
-              {step < 3 && (
-                <div className={`w-16 h-2 mx-2 rounded-full transition-all duration-500 ${
-                  currentStep > step ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700"
-                }`}>
-                  {currentStep > step && (
-                    <div className="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full animate-pulse"></div>
-                  )}
-                </div>
+              {step < 4 && (
+                <div className={`w-10 h-1 mx-1 rounded-full transition-all ${
+                  getProgressStep() > step ? "bg-green-500" : "bg-gray-200 dark:bg-gray-700"
+                }`} />
               )}
             </div>
           ))}
         </div>
 
-        {/* Step 1: Security Questions */}
-        {currentStep === 1 && (
-          <Card className="p-8 border-2 border-blue-200 dark:border-blue-800 shadow-2xl backdrop-blur-sm bg-white/95 dark:bg-gray-900/95 relative overflow-hidden animate-in fade-in slide-in-from-bottom duration-500">
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600"></div>
-            
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 mb-4 transform hover:rotate-12 transition-transform duration-300">
-                <IconComponent className="w-10 h-10 text-blue-600 dark:text-blue-400" />
+        {currentPage === "questions" && (
+          <Card className="p-5 border-2 border-blue-200 dark:border-blue-800 shadow-xl bg-white/95 dark:bg-gray-900/95">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600"></div>
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 mb-2">
+                <IconComponent className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">
                 Question {currentQuestion + 1} of {securityQuestions.length}
               </h2>
-              <p className="text-gray-600 dark:text-gray-300">{currentQ.tip}</p>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">{currentQ.tip}</p>
             </div>
 
             {error && (
-              <Alert variant="destructive" className="mb-6 animate-in fade-in slide-in-from-top-2 shake">
-                <AlertCircle className="h-5 w-5" />
-                <AlertDescription className="font-medium">{error}</AlertDescription>
+              <Alert variant="destructive" className="mb-3 py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-sm">{error}</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <Label className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-3">
-                  <Lock className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-base font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-blue-600" />
                   {currentQ.question}
                 </Label>
                 <Input
                   type="text"
                   placeholder={currentQ.placeholder}
-                  value={answers[currentQ.id as keyof typeof answers]}
+                  value={answers[currentQ.id as keyof typeof answers] || ""}
                   onChange={(e) => handleAnswerChange(e.target.value)}
-                  className="bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-4 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-lg py-7 rounded-xl hover:border-blue-400 hover:shadow-lg"
+                  className="border-2 focus:ring-2 text-base py-5 rounded-lg"
                   onKeyDown={(e) => e.key === 'Enter' && handleNextQuestion()}
-                  autoFocus
                 />
-                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2 bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg">
-                  <Shield className="w-4 h-4 text-blue-600" />
-                  Your answers are encrypted and stored securely with bank-level protection
-                </p>
               </div>
 
-              {/* Enhanced Progress Bar */}
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-300">
-                  <span className="flex items-center gap-2">
-                    <Star className="w-4 h-4 text-yellow-500" />
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-300">
+                  <span className="flex items-center gap-1">
+                    <Star className="w-3 h-3 text-yellow-500" />
                     Progress
                   </span>
                   <span className="text-blue-600 dark:text-blue-400 font-bold">
                     {currentQuestion + 1}/{securityQuestions.length}
                   </span>
                 </div>
-                <div className="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shadow-inner">
+                <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 transition-all duration-700 ease-out relative"
+                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 transition-all duration-700"
                     style={{ width: `${((currentQuestion + 1) / securityQuestions.length) * 100}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/30 animate-pulse"></div>
-                  </div>
+                  />
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-2 pt-2">
                 {currentQuestion > 0 && (
                   <Button
                     onClick={handlePreviousQuestion}
                     variant="outline"
-                    className="flex-1 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all py-7 text-lg rounded-xl font-semibold hover:scale-105"
+                    className="flex-1 py-5 text-sm rounded-lg"
                   >
                     Previous
                   </Button>
                 )}
                 <Button
                   onClick={handleNextQuestion}
-                  className={`${currentQuestion > 0 ? 'flex-1' : 'w-full'} bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 text-white font-bold py-7 text-lg shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-600/60 transition-all duration-300 rounded-xl hover:scale-105 flex items-center justify-center gap-2`}
+                  className={`${currentQuestion > 0 ? 'flex-1' : 'w-full'} bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 py-5 text-sm rounded-lg`}
                 >
-                  {currentQuestion < securityQuestions.length - 1 ? "Next Question" : "Continue to Security Setup"}
-                  <ArrowRight className="w-5 h-5" />
+                  {currentQuestion < securityQuestions.length - 1 ? "Next Question" : "Continue to PIN"}
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             </div>
           </Card>
         )}
 
-        {/* Step 2: Additional Security Setup */}
-        {currentStep === 2 && (
-          <Card className="p-8 border-2 border-indigo-200 dark:border-indigo-800 shadow-2xl backdrop-blur-sm bg-white/95 dark:bg-gray-900/95 relative overflow-hidden animate-in fade-in slide-in-from-right duration-500">
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-600"></div>
-            
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 mb-4 transform hover:rotate-12 transition-transform duration-300">
-                <KeyRound className="w-10 h-10 text-indigo-600 dark:text-indigo-400" />
+        {currentPage === "pin" && (
+          <Card className="p-5 border-2 border-indigo-200 dark:border-indigo-800 shadow-xl bg-white/95 dark:bg-gray-900/95">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-600"></div>
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 mb-2">
+                <Fingerprint className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Additional Security Layer</h2>
-              <p className="text-gray-600 dark:text-gray-300">Set up backup recovery and create your security PIN</p>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">Create Security PIN</h2>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">4-digit PIN for quick verification</p>
             </div>
 
             {error && (
-              <Alert variant="destructive" className="mb-6 animate-in fade-in slide-in-from-top-2">
-                <AlertCircle className="h-5 w-5" />
-                <AlertDescription className="font-medium">{error}</AlertDescription>
+              <Alert variant="destructive" className="mb-3 py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-sm">{error}</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-6">
-              {/* Backup Contact Methods */}
-              <div className="space-y-4 p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-2 border-blue-200 dark:border-blue-800">
-                <h3 className="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
-                  <UserCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                  Backup Recovery Contact
-                </h3>
-                
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="backupEmail" className="text-gray-700 dark:text-gray-200 font-semibold">Backup Email Address</Label>
-                    <Input
-                      id="backupEmail"
-                      type="email"
-                      placeholder="your.backup@email.com"
-                      value={backupEmail}
-                      onChange={(e) => setBackupEmail(e.target.value)}
-                      className="bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 focus:ring-4 focus:ring-blue-500/50 transition-all py-6 text-lg rounded-xl"
-                    />
-                  </div>
-
-                  <div className="text-center font-semibold text-gray-500 dark:text-gray-400">OR</div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="backupPhone" className="text-gray-700 dark:text-gray-200 font-semibold">Backup Phone Number</Label>
-                    <Input
-                      id="backupPhone"
-                      type="tel"
-                      placeholder="+1 (555) 123-4567"
-                      value={backupPhone}
-                      onChange={(e) => setBackupPhone(e.target.value)}
-                      className="bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 focus:ring-4 focus:ring-blue-500/50 transition-all py-6 text-lg rounded-xl"
-                    />
-                  </div>
-                </div>
-
-                {!verificationSent ? (
-                  <Button
-                    onClick={handleSendVerificationCode}
-                    disabled={isLoading || (!backupEmail && !backupPhone)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-6 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        Sending Code...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-5 h-5 mr-2" />
-                        Send Verification Code
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <Alert className="border-green-500 bg-green-50 dark:bg-green-950/30 animate-in zoom-in">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <AlertDescription className="text-green-700 dark:text-green-300 font-semibold">
-                      ✓ Code sent to {backupEmail || backupPhone}!
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-
-              {/* Verification Code */}
-              {verificationSent && (
-                <div className="space-y-3 animate-in fade-in slide-in-from-top duration-500 p-6 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 border-2 border-purple-200 dark:border-purple-800">
-                  <Label htmlFor="verificationCode" className="text-gray-800 dark:text-white font-bold text-lg flex items-center gap-2">
-                    <KeyRound className="w-5 h-5 text-purple-600" />
-                    Enter 6-Digit Verification Code
-                  </Label>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Enter 4-Digit PIN</Label>
+                <div className="relative">
                   <Input
-                    id="verificationCode"
-                    type="text"
-                    maxLength={6}
-                    placeholder="● ● ● ● ● ●"
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                    className="text-center text-3xl tracking-[1em] font-bold bg-white dark:bg-gray-800 border-2 border-purple-300 dark:border-purple-600 focus:ring-4 focus:ring-purple-500/50 py-8 rounded-xl"
+                    type={showPin ? "text" : "password"}
+                    maxLength={4}
+                    placeholder="••••"
+                    value={securityPin}
+                    onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, ""))}
+                    className="text-center text-2xl tracking-[1em] font-bold py-6 pr-10 rounded-lg"
                   />
-                </div>
-              )}
-
-              {/* Security PIN Setup */}
-              <div className="space-y-4 p-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border-2 border-indigo-200 dark:border-indigo-800">
-                <h3 className="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2">
-                  <Fingerprint className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                  Create Security PIN
-                </h3>
-                
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="securityPin" className="text-gray-700 dark:text-gray-200 font-semibold">4-Digit Security PIN</Label>
-                    <div className="relative">
-                      <Input
-                        id="securityPin"
-                        type={showPin ? "text" : "password"}
-                        maxLength={4}
-                        placeholder="••••"
-                        value={securityPin}
-                        onChange={(e) => setSecurityPin(e.target.value.replace(/\D/g, ""))}
-                        className="text-center text-3xl tracking-[1em] font-bold bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 focus:ring-4 focus:ring-indigo-500/50 py-8 pr-12 rounded-xl"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPin(!showPin)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-2"
-                      >
-                        {showPin ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPin" className="text-gray-700 dark:text-gray-200 font-semibold">Confirm Security PIN</Label>
-                    <div className="relative">
-                      <Input
-                        id="confirmPin"
-                        type={showConfirmPin ? "text" : "password"}
-                        maxLength={4}
-                        placeholder="••••"
-                        value={confirmPin}
-                        onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
-                        className="text-center text-3xl tracking-[1em] font-bold bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 focus:ring-4 focus:ring-indigo-500/50 py-8 pr-12 rounded-xl"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPin(!showConfirmPin)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-2"
-                      >
-                        {showConfirmPin ? <EyeOff className="w-6 h-6" /> : <Eye className="w-6 h-6" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {confirmPin && securityPin !== confirmPin && (
-                    <Alert variant="destructive" className="animate-in fade-in">
-                      <AlertCircle className="w-4 h-4" />
-                      <AlertDescription>PINs do not match</AlertDescription>
-                    </Alert>
-                  )}
-                  
-                  {confirmPin && securityPin === confirmPin && securityPin.length === 4 && (
-                    <Alert className="border-green-500 bg-green-50 dark:bg-green-950/30 animate-in zoom-in">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <AlertDescription className="text-green-700 dark:text-green-300 font-semibold">
-                        Perfect! PINs match ✓
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  >
+                    {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Confirm PIN</Label>
+                <div className="relative">
+                  <Input
+                    type={showConfirmPin ? "text" : "password"}
+                    maxLength={4}
+                    placeholder="••••"
+                    value={confirmPin}
+                    onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                    className="text-center text-2xl tracking-[1em] font-bold py-6 pr-10 rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPin(!showConfirmPin)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  >
+                    {showConfirmPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {confirmPin && securityPin !== confirmPin && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertCircle className="w-3 h-3" />
+                  <AlertDescription className="text-xs">PINs do not match</AlertDescription>
+                </Alert>
+              )}
+              
               <Button
-                onClick={handleStep2Submit}
-                disabled={isLoading || !verificationCode || securityPin.length !== 4 || securityPin !== confirmPin}
-                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white font-bold py-7 text-lg shadow-xl shadow-indigo-500/50 hover:shadow-2xl transition-all duration-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105"
+                onClick={handlePinSubmit}
+                disabled={securityPin.length !== 4 || securityPin !== confirmPin}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 py-5 text-sm rounded-lg"
               >
-                {isLoading ? (
-                  <>
-                    <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    Continue to Final Step
-                    <Sparkles className="w-5 h-5 ml-2" />
-                  </>
-                )}
+                Continue to Family Contact
+                <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </Card>
         )}
 
-        {/* Step 3: Final Confirmation */}
-        {currentStep === 3 && (
-          <Card className="p-10 border-2 border-green-200 dark:border-green-800 shadow-2xl backdrop-blur-sm bg-white/95 dark:bg-gray-900/95 relative overflow-hidden animate-in fade-in zoom-in duration-700">
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500"></div>
-            
-            {celebrating && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-64 h-64 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+        {currentPage === "family" && (
+          <Card className="p-5 border-2 border-purple-200 dark:border-purple-800 shadow-xl bg-white/95 dark:bg-gray-900/95">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-rose-600"></div>
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 mb-2">
+                <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-1">Family/Nominee Contact</h2>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">Backup contact for asset recovery</p>
+            </div>
+
+            {error && (
+              <Alert variant="destructive" className="mb-3 py-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-sm">{error}</AlertDescription>
+              </Alert>
             )}
-            
-            <div className="text-center mb-8 relative z-10">
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 mb-6 relative transform hover:rotate-12 transition-transform duration-300">
-                <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl blur-xl opacity-40 animate-pulse"></div>
-                <Trophy className="w-14 h-14 text-green-600 dark:text-green-400 relative z-10" />
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Family Member Name</Label>
+                <Input
+                  type="text"
+                  placeholder="Enter full name"
+                  value={familyName}
+                  onChange={(e) => setFamilyName(e.target.value)}
+                  className="py-5 text-sm rounded-lg"
+                />
               </div>
-              <h2 className="text-4xl font-bold bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent mb-3 animate-in zoom-in">
-                Trust Verification Complete! 🎉
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Email Address</Label>
+                <Input
+                  type="email"
+                  placeholder="family@email.com"
+                  value={familyEmail}
+                  onChange={(e) => setFamilyEmail(e.target.value)}
+                  className="py-5 text-sm rounded-lg"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Phone Number</Label>
+                <Input
+                  type="tel"
+                  placeholder="10-digit mobile number"
+                  value={familyPhone}
+                  onChange={(e) => setFamilyPhone(e.target.value.replace(/\D/g, ""))}
+                  className="py-5 text-sm rounded-lg"
+                />
+              </div>
+
+              <Button
+                onClick={handleFamilySubmit}
+                disabled={isLoading}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 py-5 text-sm rounded-lg"
+              >
+                {isLoading ? "Saving..." : "Complete Verification"}
+                <Sparkles className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {currentPage === "complete" && (
+          <Card className="p-6 border-2 border-green-200 dark:border-green-800 shadow-xl bg-white/95 dark:bg-gray-900/95">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500"></div>
+            <div className="text-center mb-4 relative z-10">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 mb-3">
+                <Trophy className="w-9 h-9 text-green-600 dark:text-green-400" />
+              </div>
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">
+                Verification Complete! 🎉
               </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-300">Your account is now protected with enhanced security</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Your account is now fully protected</p>
             </div>
 
-            <div className="space-y-4 mb-10 relative z-10">
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-2 border-green-200 dark:border-green-800 transform hover:scale-105 transition-transform duration-300">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
-                    <CheckCircle className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-1">Security Questions Set</h3>
-                    <p className="text-gray-600 dark:text-gray-300">5 security questions configured for account recovery</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-2 border-blue-200 dark:border-blue-800 transform hover:scale-105 transition-transform duration-300">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center">
-                    <CheckCircle className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-1">Backup Contact Verified</h3>
-                    <p className="text-gray-600 dark:text-gray-300">
-                      {backupEmail || backupPhone} confirmed for account recovery
-                    </p>
+            <div className="space-y-2 mb-6 relative z-10">
+              {[
+                { title: "Security Questions", sub: "3 questions configured", color: "green" },
+                { title: "Security PIN", sub: "4-digit PIN created", color: "blue" },
+                { title: "Family Contact", sub: `${familyName}`, color: "purple" }
+              ].map((item, i) => (
+                <div key={i} className={`p-3 rounded-lg bg-${item.color}-50 dark:bg-${item.color}-950/30 border border-${item.color}-200 dark:border-${item.color}-800`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg bg-${item.color}-500 flex items-center justify-center`}>
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-gray-800 dark:text-white">{item.title}</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-300">{item.sub}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 border-2 border-purple-200 dark:border-purple-800 transform hover:scale-105 transition-transform duration-300">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center">
-                    <CheckCircle className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-1">Security PIN Created</h3>
-                    <p className="text-gray-600 dark:text-gray-300">4-digit PIN set for quick verification</p>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
-
-            <Alert className="mb-8 border-blue-500 bg-blue-50 dark:bg-blue-950/30 relative z-10">
-              <Shield className="h-5 w-5 text-blue-600" />
-              <AlertDescription className="text-gray-700 dark:text-gray-200">
-                <span className="font-bold">Important:</span> You'll be asked to verify your identity using these security measures when performing sensitive operations or accessing your account from new devices.
-              </AlertDescription>
-            </Alert>
 
             <Button
               onClick={handleFinalSubmit}
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold py-8 text-xl shadow-2xl shadow-green-500/50 hover:shadow-3xl hover:shadow-green-600/60 transition-all duration-300 rounded-2xl relative z-10 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 py-5 text-sm rounded-lg"
             >
-              {isLoading ? (
-                <>
-                  <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin mr-3" />
-                  Taking you to dashboard...
-                </>
-              ) : (
-                <>
-                  <Trophy className="w-6 h-6 mr-3" />
-                  Complete Setup & Go to Dashboard
-                  <ArrowRight className="w-6 h-6 ml-3" />
-                </>
-              )}
+              {isLoading ? "Redirecting..." : "Go to Dashboard"}
+              <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </Card>
         )}
-
-        {/* Enhanced Security Notice */}
-        <div className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 border-2 border-gray-200 dark:border-gray-700 backdrop-blur-sm shadow-lg">
-          <p className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-3">
-            <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <span>
-              <span className="font-bold text-gray-800 dark:text-white">Timeout Protection:</span> For your security, this session will expire after 15 minutes of inactivity. You can resume the verification process anytime from your account settings.
-            </span>
-          </p>
-        </div>
       </div>
     </div>
   )

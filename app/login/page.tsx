@@ -104,32 +104,33 @@ export default function EnhancedLoginPage() {
   }
 
   const handleForgotPassword = async () => {
-    if (!resetEmail || !validateEmail(resetEmail)) {
-      setError("Please enter a valid email address")
-      return
-    }
-
-    setResetLoading(true)
-    setError("")
-
-    try {
-      // TODO: Connect to Spring Boot backend for password reset
-      // const response = await fetch('http://localhost:8080/api/auth/forgot-password', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ email: resetEmail })
-      // })
-
-      // Simulate API call for now
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      setResetEmailSent(true)
-    } catch (err) {
-      setError("Failed to send reset email. Please try again.")
-    } finally {
-      setResetLoading(false)
-    }
+  if (!resetEmail || !validateEmail(resetEmail)) {
+    setError("Please enter a valid email address")
+    return
   }
+
+  setResetLoading(true)
+  setError("")
+
+  try {
+    const response = await fetch('http://localhost:8080/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: resetEmail })
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to send reset email")
+    }
+
+    setResetEmailSent(true)
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Failed to send reset email. Please try again."
+    setError(errorMessage)
+  } finally {
+    setResetLoading(false)
+  }
+}
 
   const resetForgotPasswordForm = () => {
     setShowForgotPassword(false)
