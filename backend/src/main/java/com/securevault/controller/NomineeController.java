@@ -9,12 +9,12 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/nominees") 
+@RequestMapping("/api/nominees") // Added /api to match your React fetch calls
+@CrossOrigin(origins = "http://localhost:3000") // Required for React connection
 public class NomineeController {
 
     private final NomineeService nomineeService;
 
-    // Manual Constructor to initialize the final field
     public NomineeController(NomineeService nomineeService) {
         this.nomineeService = nomineeService;
     }

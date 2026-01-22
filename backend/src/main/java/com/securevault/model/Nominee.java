@@ -34,10 +34,9 @@ public class Nominee {
     @Column(columnDefinition = "boolean default false")
     private Boolean identityConfirmed = false;
 
-	public void setUser(User user2) {
-		// TODO Auto-generated method stub
-		
-	}
+    public void setUser(User user) {
+        this.user = user;
+    }
 
 	public UUID getId() {
 		return id;

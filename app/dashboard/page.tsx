@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
@@ -26,6 +27,7 @@ interface Activity {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [overview, setOverview] = useState<DashboardOverview>({
     totalAssets: 0,
     activeNominees: 0,
@@ -42,60 +44,57 @@ export default function DashboardPage() {
   const [showSecurityTip, setShowSecurityTip] = useState(true)
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (userData) {
-      setUser(JSON.parse(userData))
+    const checkSessionAndFetchData = async () => {
+      console.log("🔍 Checking session...")
+      const userData = localStorage.getItem("user");
+      
+      if (!userData) {
+        console.log("❌ No user found, redirecting...");
+        router.push("/login");
+        return;
+      }
+
+      try {
+        const parsedUser = JSON.parse(userData);
+        
+        // Match the field 'id' from your Login Page
+        if (!parsedUser.id) {
+          console.log("❌ User ID missing in storage, redirecting...");
+          router.push("/login");
+          return;
+        }
+        
+        setUser(parsedUser);
+
+        // 3. FETCH REAL DATA
+        // Use Promise.all to fetch both simultaneously for better performance
+        const [assetRes, nomineeRes] = await Promise.all([
+          fetch(`http://localhost:8080/api/assets/user/${parsedUser.id}`),
+          fetch(`http://localhost:8080/api/nominees/user/${parsedUser.id}`)
+        ]);
+
+        const assets = assetRes.ok ? await assetRes.json() : [];
+        const nominees = nomineeRes.ok ? await nomineeRes.json() : [];
+
+        // 4. Update the Overview with REAL counts
+        setOverview(prev => ({
+          ...prev,
+          totalAssets: assets.length,
+          activeNominees: nominees.length,
+          lastLoginDate: new Date().toLocaleDateString(),
+          inactivityDaysRemaining: 180, // You can make this dynamic later
+        }));
+
+      } catch (error) {
+        console.error("❌ Fetch error - likely backend is down:", error);
+        // NOTE: We don't clear storage here so the user stays logged in
+      } finally {
+        setLoading(false);
+      }
     }
 
-    // Simulate fetching dashboard data
-    const timer = setTimeout(() => {
-      setOverview({
-        totalAssets: 5,
-        activeNominees: 3,
-        pendingTransfers: 1,
-        lastLoginDate: new Date().toLocaleDateString(),
-        inactivityDaysRemaining: 180,
-        currentPlan: "plus",
-        storageUsed: 2.5,
-        storageLimit: 5,
-      })
-
-      setActivities([
-        {
-          id: "1",
-          type: "asset_added",
-          description: "Digital Will document added",
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toLocaleString(),
-          icon: Lock,
-        },
-        {
-          id: "2",
-          type: "nominee_assigned",
-          description: "Nominee John Doe assigned to Digital Will",
-          timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toLocaleString(),
-          icon: Users,
-        },
-        {
-          id: "3",
-          type: "plan_upgraded",
-          description: "Plan upgraded from Free to Plus",
-          timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toLocaleString(),
-          icon: Zap,
-        },
-        {
-          id: "4",
-          type: "reminder_sent",
-          description: "Monthly security reminder sent",
-          timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toLocaleString(),
-          icon: Clock,
-        },
-      ])
-
-      setLoading(false)
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [])
+    checkSessionAndFetchData();
+  }, [router]); // Router is now a dependency
 
   const planConfig: any = {
     free: { name: "Free", color: "bg-gray-600", assetLimit: 3, videoMessage: false },

@@ -4,6 +4,9 @@ import com.securevault.model.Nominee;
 import com.securevault.model.User;
 import com.securevault.repository.NomineeRepository;
 import com.securevault.repository.UserRepository;
+
+import jakarta.transaction.Transactional;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
@@ -20,11 +23,12 @@ public class NomineeService {
         this.userRepository = userRepository;
     }
 
+    @Transactional // Add this to ensure database consistency
     public Nominee addNominee(UUID userId, Nominee nomineeData) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Logged-in user with ID " + userId + " not found"));
 
-        // Ensure you have a setUser() method in your Nominee.java model!
+        // This now works because we fixed the method in the Model!
         nomineeData.setUser(user);
 
         return nomineeRepository.save(nomineeData);

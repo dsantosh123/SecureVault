@@ -29,6 +29,24 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
 
+  # ✅ EMAIL CONFIGURATION - ADD THIS SECTION
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: sdonapurge@gmail.com  # Replace with your Gmail
+    password: gjhbogyreyqqvudi  # Replace with Gmail App Password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+    test-connection: false
+
 server:
   port: 8080
   servlet:
@@ -54,8 +72,13 @@ app:
     check-interval: 1h
     grace-period-days: 7
 
+# ✅ OTP CONFIGURATION - ADD THIS SECTION
+otp:
+  expiry-minutes: 5
+  length: 6
+
 logging:
   level:
     org.springframework.security: INFO
     org.hibernate.SQL: DEBUG
-
+    org.springframework.mail: DEBUG  # ✅ ADD THIS to see email logs

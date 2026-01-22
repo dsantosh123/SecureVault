@@ -106,8 +106,8 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
         body: JSON.stringify({
             name: nominee.name,
             email: nominee.email,
-            relationship: "Primary", // Or pull from form
-            phoneNumber: nominee.mobile
+            relationship: "Primary",
+            phoneNumber: nominee.mobile // Ensure this is 'phoneNumber' to match Java!
         }),
     });
     if (!response.ok) throw new Error("Failed to register nominee");
@@ -119,41 +119,44 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
     if (!validateForm()) return;
 
     setIsLoading(true);
-    
-    // Create FormData to send both text and the physical file
-    const data = new FormData();
-    
-    // 1. Retrieve the logged-in User's ID from LocalStorage
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    const userId = user.id; // Ensure you saved the ID during signup/login
-
-    // 2. Map frontend fields to Backend @RequestParam names
-    data.append("userId", userId);
-    // For now, we take the first nominee from your array
-    data.append("nomineeId", formData.nominees[0].id); 
-    data.append("description", formData.description || formData.assetName);
-
-    // 3. Append the physical file from the input ref
-    if (fileInputRef.current?.files?.[0]) {
-        data.append("file", fileInputRef.current.files[0]);
-    }
+    setErrors({});
 
     try {
+        // 1. Get logged-in User's ID
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        if (!user.id) throw new Error("Session expired. Please login again.");
+
+        // 2. STEP 1: Save the Nominee first to get a REAL PostgreSQL UUID
+        // We use the helper function you already have in your code
+        const savedNominee = await saveNomineeToBackend(user.id, formData.nominees[0]);
+        const realNomineeId = savedNominee.id; // This is the real UUID from DB
+
+        // 3. STEP 2: Prepare FormData for the file upload
+        const data = new FormData();
+        data.append("userId", user.id);
+        data.append("nomineeId", realNomineeId); // Use the real UUID here!
+        data.append("description", formData.description || formData.assetName);
+
+        if (fileInputRef.current?.files?.[0]) {
+            data.append("file", fileInputRef.current.files[0]);
+        }
+
+        // 4. STEP 3: Upload to Spring Boot
         const response = await fetch("http://localhost:8080/api/assets/upload", {
             method: "POST",
-            // NOTE: Do NOT set Content-Type header. 
-            // The browser will automatically set it to multipart/form-data with a boundary.
-            body: data, 
+            body: data, // Browser automatically sets multipart/form-data
         });
 
         if (!response.ok) {
-            throw new Error("Failed to upload asset to server");
+            const errorText = await response.text();
+            throw new Error(errorText || "Failed to upload asset");
         }
 
-        setSuccessMessage("Asset successfully encrypted and stored in SecureVault!");
+        setSuccessMessage("Asset successfully encrypted and stored!");
         setTimeout(() => router.push("/dashboard/assets"), 1500);
-    } catch (err) {
-        setErrors({ submit: "Connection error: Backend server is unreachable" });
+
+    } catch (err: any) {
+        setErrors({ submit: err.message || "Connection error: Backend unreachable" });
     } finally {
         setIsLoading(false);
     }
