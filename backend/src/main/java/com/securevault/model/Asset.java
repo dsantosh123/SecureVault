@@ -1,46 +1,47 @@
 package com.securevault.model;
 
-import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
-@Entity
-@Table(name = "assets")
+@Document(collection = "assets")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Asset {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    private String id;
 
-    @Column(nullable = false)
+    @NotBlank(message = "File name is required")
     private String fileName;
 
-    @Column(nullable = false)
+    @NotBlank(message = "File type is required")
     private String fileType;
 
-    @Column(nullable = false)
-    private String s3Key;
+    @NotBlank(message = "File ID is required")
+    private String fileId;
 
     private Long fileSize;
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
+    private String userId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "nominee_id")
-    private Nominee assignedNominee;
+    // Support multiple nominees per asset
+    private List<String> nomineeIds = new ArrayList<>();
 
     private LocalDateTime uploadedAt = LocalDateTime.now();
     private Boolean isReleased = false;
 
-    // Standard Constructor
-    public Asset() {}
-
-    // GETTERS AND SETTERS (This is what fixes your Service error)
-    public UUID getId() { return id; }
-    public void setId(UUID id) { this.id = id; }
+    // Standard getters and setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
@@ -48,8 +49,8 @@ public class Asset {
     public String getFileType() { return fileType; }
     public void setFileType(String fileType) { this.fileType = fileType; }
 
-    public String getS3Key() { return s3Key; }
-    public void setS3Key(String s3Key) { this.s3Key = s3Key; }
+    public String getFileId() { return fileId; }
+    public void setFileId(String fileId) { this.fileId = fileId; }
 
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
@@ -57,11 +58,11 @@ public class Asset {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
-    public User getUser() { return user; }
-    public void setUser(User user) { this.user = user; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 
-    public Nominee getAssignedNominee() { return assignedNominee; }
-    public void setAssignedNominee(Nominee assignedNominee) { this.assignedNominee = assignedNominee; }
+    public List<String> getNomineeIds() { return nomineeIds != null ? nomineeIds : new ArrayList<>(); }
+    public void setNomineeIds(List<String> nomineeIds) { this.nomineeIds = nomineeIds != null ? nomineeIds : new ArrayList<>(); }
 
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }

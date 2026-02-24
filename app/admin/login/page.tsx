@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { Shield, Lock, Mail, AlertCircle, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { API_ENDPOINTS } from "@/lib/api-config"
+import { apiPost } from "@/lib/api-client"
 
 export default function AdminLogin() {
   const router = useRouter()
@@ -70,18 +72,11 @@ export default function AdminLogin() {
     setLoading(true)
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await apiPost(API_ENDPOINTS.auth.adminLogin, { email, password });
 
-      // Demo credentials (REMOVE IN PRODUCTION)
-      if (email === "admin@securevault-admin.com" && password === "SecureVault@2024") {
-        const mockToken = btoa(JSON.stringify({
-          adminId: "ADMIN-001",
-          email: email,
-          role: "ROLE_ADMIN",
-          exp: Date.now() + 8 * 60 * 60 * 1000
-        }))
-
-        localStorage.setItem("adminToken", mockToken)
+      if (response.success) {
+        const data = response.data as any;
+        localStorage.setItem("adminToken", data.token)
         localStorage.setItem("adminEmail", email)
         localStorage.setItem("adminLoginTime", Date.now().toString())
 
@@ -95,7 +90,7 @@ export default function AdminLogin() {
           setLockTimer(900)
           setError("Too many failed login attempts. Account locked for 15 minutes.")
         } else {
-          setError(`Invalid credentials. ${5 - newAttemptCount} attempts remaining.`)
+          setError(response.error || `Invalid credentials. ${5 - newAttemptCount} attempts remaining.`)
         }
       }
     } catch (err) {

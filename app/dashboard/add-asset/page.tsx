@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, CheckCircle2, Upload, Users, X, FileText, Video, Plus, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { API_ENDPOINTS, getAuthToken } from "@/lib/api-config"
+import { apiPost } from "@/lib/api-client"
 
 interface Nominee {
   id: string
@@ -56,6 +58,13 @@ export default function AddAssetPage() {
     { value: "24", label: "2 years" },
   ]
 
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      router.push("/login");
+    }
+  }, [router]);
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
 
@@ -98,21 +107,20 @@ export default function AddAssetPage() {
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
-  // Add this helper function to save the nominee to the backend
-const saveNomineeToBackend = async (userId: string, nominee: any) => {
-    const response = await fetch(`http://localhost:8080/api/nominees/add/${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            name: nominee.name,
-            email: nominee.email,
-            relationship: "Primary",
-            phoneNumber: nominee.mobile // Ensure this is 'phoneNumber' to match Java!
-        }),
+
+  const saveNomineeToBackend = async (nominee: any) => {
+    const response = await apiPost<any>(API_ENDPOINTS.nominees.add, {
+      name: nominee.name,
+      email: nominee.email,
+      relationship: "Primary",
+      phoneNumber: nominee.mobile
     });
-    if (!response.ok) throw new Error("Failed to register nominee");
-    return await response.json(); // This returns the nominee with the real UUID from DB
-};
+
+    if (!response.success) {
+      throw new Error(response.error || "Failed to register nominee");
+    }
+    return response.data; // This returns the nominee with the real ID from DB
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,45 +130,49 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
     setErrors({});
 
     try {
-        // 1. Get logged-in User's ID
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        if (!user.id) throw new Error("Session expired. Please login again.");
+      const token = getAuthToken();
+      if (!token) throw new Error("Session expired. Please login again.");
 
-        // 2. STEP 1: Save the Nominee first to get a REAL PostgreSQL UUID
-        // We use the helper function you already have in your code
-        const savedNominee = await saveNomineeToBackend(user.id, formData.nominees[0]);
-        const realNomineeId = savedNominee.id; // This is the real UUID from DB
+      // 1. Save the Nominee first to get a REAL ID
+      const savedNominee = await saveNomineeToBackend(formData.nominees[0]);
+      const realNomineeId = savedNominee.id;
 
-        // 3. STEP 2: Prepare FormData for the file upload
-        const data = new FormData();
-        data.append("userId", user.id);
-        data.append("nomineeId", realNomineeId); // Use the real UUID here!
-        data.append("description", formData.description || formData.assetName);
+      // 2. Prepare FormData for the file upload
+      const data = new FormData();
+      data.append("nomineeId", realNomineeId);
+      data.append("description", formData.description || formData.assetName);
 
-        if (fileInputRef.current?.files?.[0]) {
-            data.append("file", fileInputRef.current.files[0]);
-        }
-
-        // 4. STEP 3: Upload to Spring Boot
-        const response = await fetch("http://localhost:8080/api/assets/upload", {
-            method: "POST",
-            body: data, // Browser automatically sets multipart/form-data
+      if (fileInputRef.current?.files?.[0]) {
+        data.append("file", fileInputRef.current.files[0]);
+      } else if (formData.assetType === "Credentials" || formData.assetType === "Crypto" || formData.assetType === "Other") {
+        // For text-based assets, we might want to create a virtual file or handle differently
+        // currently the backend expects a MultipartFile.
+        const content = JSON.stringify({
+          type: formData.assetType,
+          username: formData.username,
+          secret: formData.secret,
+          notes: formData.credentialNotes
         });
+        const blob = new Blob([content], { type: "application/json" });
+        data.append("file", blob, `${formData.assetName}.json`);
+      }
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || "Failed to upload asset");
-        }
+      // 3. Upload to Spring Boot
+      const response = await apiPost<any>(API_ENDPOINTS.assets.create, data);
 
-        setSuccessMessage("Asset successfully encrypted and stored!");
-        setTimeout(() => router.push("/dashboard/assets"), 1500);
+      if (!response.success) {
+        throw new Error(response.error || "Failed to upload asset");
+      }
+
+      setSuccessMessage("Asset successfully encrypted and stored!");
+      setTimeout(() => router.push("/dashboard/assets"), 1500);
 
     } catch (err: any) {
-        setErrors({ submit: err.message || "Connection error: Backend unreachable" });
+      setErrors({ submit: err.message || "An unexpected error occurred" });
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-};
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -180,7 +192,7 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
     const newNominees = [...formData.nominees]
     newNominees[index] = { ...newNominees[index], [field]: value }
     setFormData((prev) => ({ ...prev, nominees: newNominees }))
-    
+
     const errorKey = `nominee_${index}_${field}`
     if (errors[errorKey]) {
       setErrors((prev) => ({ ...prev, [errorKey]: "" }))
@@ -200,7 +212,7 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
     if (formData.nominees.length > 1) {
       const newNominees = formData.nominees.filter((_, i) => i !== index)
       setFormData((prev) => ({ ...prev, nominees: newNominees }))
-      
+
       // Clear errors for this nominee
       const newErrors = { ...errors }
       delete newErrors[`nominee_${index}_name`]
@@ -217,10 +229,10 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setFormData((prev) => ({ 
-        ...prev, 
+      setFormData((prev) => ({
+        ...prev,
         fileUrl: URL.createObjectURL(file),
-        fileName: file.name 
+        fileName: file.name
       }))
       if (errors.fileUrl) {
         setErrors((prev) => ({ ...prev, fileUrl: "" }))
@@ -258,7 +270,7 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
               Upload File <span className="text-destructive">*</span>
             </Label>
             {!formData.fileUrl ? (
-              <div 
+              <div
                 onClick={handleFileSelect}
                 className="flex items-center justify-center border-2 border-dashed border-border rounded-lg p-8 hover:border-primary/50 transition-colors cursor-pointer"
               >
@@ -306,7 +318,7 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
               Upload Video <span className="text-destructive">*</span>
             </Label>
             {!formData.fileUrl ? (
-              <div 
+              <div
                 onClick={handleFileSelect}
                 className="flex items-center justify-center border-2 border-dashed border-border rounded-lg p-8 hover:border-primary/50 transition-colors cursor-pointer"
               >
@@ -422,7 +434,7 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
                 Optional: Upload Supporting Document
               </Label>
               {!formData.fileUrl ? (
-                <div 
+                <div
                   onClick={handleFileSelect}
                   className="flex items-center justify-center border-2 border-dashed border-border rounded-lg p-6 hover:border-primary/50 transition-colors cursor-pointer"
                 >
@@ -486,7 +498,7 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
           </Alert>
         )}
 
-        <div className="space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-2">
             <Label htmlFor="assetType" className="text-foreground font-semibold">
               Asset Type <span className="text-destructive">*</span>
@@ -699,13 +711,12 @@ const saveNomineeToBackend = async (userId: string, nominee: any) => {
 
           <Button
             type="submit"
-            onClick={handleSubmit}
             disabled={isLoading}
             className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground font-semibold py-6 text-base"
           >
             {isLoading ? "Adding Asset..." : "Add Asset Securely"}
           </Button>
-        </div>
+        </form>
       </Card>
 
       <Card className="p-4 border border-border bg-accent/5">

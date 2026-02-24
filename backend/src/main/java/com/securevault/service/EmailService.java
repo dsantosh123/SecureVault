@@ -29,13 +29,17 @@ public class EmailService {
             message.setSubject("SecureVault - Email Verification Code");
             message.setText("Your verification code is: " + otp + "\n\nThis code will expire in 5 minutes.");
             
-            mailSender.send(message);
-            
-            System.out.println("✅ OTP sent to " + email + ": " + otp);
+            try {
+                mailSender.send(message);
+                System.out.println("✅ OTP sent to " + email + ": " + otp);
+            } catch (Exception mailException) {
+                System.err.println("⚠️ SMTP Error: Code not sent via email. DEVELOPMENT FALLBACK: check console for code.");
+                System.out.println("🔑 [DEV MODE] OTP for " + email + " is: " + otp);
+            }
         } catch (Exception e) {
-            System.err.println("❌ Failed to send email: " + e.getMessage());
+            System.err.println("❌ Critical failure in sendOtp: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Failed to send OTP email: " + e.getMessage());
+            throw new RuntimeException("Failed to initiate OTP process: " + e.getMessage());
         }
     }
     
@@ -68,6 +72,7 @@ public class EmailService {
             this.expiryTime = expiryTime;
         }
     }
+
     public void sendPasswordResetEmail(String email, String resetToken) {
         try {
             // Create reset link
@@ -87,14 +92,17 @@ public class EmailService {
                 "SecureVault Team"
             );
             
-            mailSender.send(message);
-            
-            System.out.println("✅ Password reset email sent to: " + email);
-            System.out.println("🔗 Reset link: " + resetLink);
+            try {
+                mailSender.send(message);
+                System.out.println("✅ Password reset email sent to: " + email);
+            } catch (Exception mailException) {
+                System.err.println("⚠️ SMTP Error: Reset link not sent via email. DEVELOPMENT FALLBACK: check console for link.");
+                System.out.println("🔗 [DEV MODE] Reset link for " + email + " is: " + resetLink);
+            }
         } catch (Exception e) {
-            System.err.println("❌ Failed to send password reset email: " + e.getMessage());
+            System.err.println("❌ Critical failure in sendPasswordResetEmail: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Failed to send password reset email: " + e.getMessage());
+            throw new RuntimeException("Failed to initiate password reset: " + e.getMessage());
         }
     }
 }

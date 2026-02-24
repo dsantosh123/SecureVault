@@ -3,18 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Download, Filter, ChevronDown, ChevronUp, Calendar, User, Shield, Clock, CheckCircle, XCircle, AlertCircle, Eye, LogOut, LogIn, FileText, Settings } from 'lucide-react';
 
+import { apiGet } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/lib/api-config';
+
 // Types
 interface AuditLog {
   id: string;
   timestamp: string;
-  adminId: string;
-  adminEmail: string;
   actionType: string;
   target: string;
   targetType: string;
-  details: any;
-  ipAddress: string;
-  userAgent: string;
+  details: string;
+  userName: string;
+  userType: string;
   status: 'SUCCESS' | 'FAILED' | 'PENDING';
 }
 
@@ -22,8 +23,7 @@ interface FilterState {
   dateFrom: string;
   dateTo: string;
   actionType: string;
-  adminId: string;
-  status: string;
+  userType: string;
   search: string;
 }
 
@@ -37,156 +37,41 @@ const AuditLogsPage = () => {
     dateFrom: '',
     dateTo: '',
     actionType: '',
-    adminId: '',
-    status: '',
+    userType: '',
     search: ''
   });
 
-  // Mock data - replace with actual API call
+  // Fetch real data from API
   useEffect(() => {
-    const mockLogs: AuditLog[] = [
-      {
-        id: 'LOG-001',
-        timestamp: '2024-01-15T14:32:18Z',
-        adminId: 'ADMIN-001',
-        adminEmail: 'john@securevault-admin.com',
-        actionType: 'APPROVE_VERIFICATION',
-        target: 'VER-789',
-        targetType: 'VERIFICATION',
-        details: {
-          nomineeEmail: 'nominee@example.com',
-          userId: 'U-123456',
-          assetId: 'AST-999',
-          adminNotes: 'Certificate verified, identity confirmed'
-        },
-        ipAddress: '192.168.1.100',
-        userAgent: 'Chrome 120 / Windows',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-002',
-        timestamp: '2024-01-15T13:15:42Z',
-        adminId: 'ADMIN-002',
-        adminEmail: 'sarah@securevault-admin.com',
-        actionType: 'REJECT_VERIFICATION',
-        target: 'VER-788',
-        targetType: 'VERIFICATION',
-        details: {
-          nomineeEmail: 'another@example.com',
-          userId: 'U-123455',
-          assetId: 'AST-998',
-          reason: 'Invalid death certificate',
-          adminNotes: 'Certificate appears to be tampered'
-        },
-        ipAddress: '192.168.1.101',
-        userAgent: 'Firefox 121 / MacOS',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-003',
-        timestamp: '2024-01-15T12:08:22Z',
-        adminId: 'ADMIN-001',
-        adminEmail: 'john@securevault-admin.com',
-        actionType: 'VIEW_DOCUMENT',
-        target: 'DOC-555',
-        targetType: 'DOCUMENT',
-        details: {
-          documentType: 'DEATH_CERTIFICATE',
-          verificationId: 'VER-789'
-        },
-        ipAddress: '192.168.1.100',
-        userAgent: 'Chrome 120 / Windows',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-004',
-        timestamp: '2024-01-15T11:45:10Z',
-        adminId: 'ADMIN-001',
-        adminEmail: 'john@securevault-admin.com',
-        actionType: 'LOGIN',
-        target: 'ADMIN-001',
-        targetType: 'ADMIN',
-        details: {
-          loginMethod: 'EMAIL_PASSWORD',
-          twoFactorUsed: true
-        },
-        ipAddress: '192.168.1.100',
-        userAgent: 'Chrome 120 / Windows',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-005',
-        timestamp: '2024-01-15T10:22:35Z',
-        adminId: 'ADMIN-003',
-        adminEmail: 'mike@securevault-admin.com',
-        actionType: 'REQUEST_DOCS',
-        target: 'VER-787',
-        targetType: 'VERIFICATION',
-        details: {
-          nomineeEmail: 'test@example.com',
-          documentsNeeded: ['DEATH_CERTIFICATE', 'ID_PROOF'],
-          message: 'Please provide clearer images of the documents'
-        },
-        ipAddress: '192.168.1.102',
-        userAgent: 'Safari 17 / iOS',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-006',
-        timestamp: '2024-01-15T09:18:47Z',
-        adminId: 'ADMIN-002',
-        adminEmail: 'sarah@securevault-admin.com',
-        actionType: 'VIEW_USER',
-        target: 'U-123456',
-        targetType: 'USER',
-        details: {
-          section: 'ACTIVITY_TIMELINE'
-        },
-        ipAddress: '192.168.1.101',
-        userAgent: 'Firefox 121 / MacOS',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-007',
-        timestamp: '2024-01-14T16:55:12Z',
-        adminId: 'ADMIN-001',
-        adminEmail: 'john@securevault-admin.com',
-        actionType: 'SYSTEM_CONFIG',
-        target: 'CONFIG-001',
-        targetType: 'SYSTEM',
-        details: {
-          setting: 'VERIFICATION_TIMEOUT',
-          oldValue: '30 days',
-          newValue: '45 days'
-        },
-        ipAddress: '192.168.1.100',
-        userAgent: 'Chrome 120 / Windows',
-        status: 'SUCCESS'
-      },
-      {
-        id: 'LOG-008',
-        timestamp: '2024-01-14T15:30:28Z',
-        adminId: 'ADMIN-004',
-        adminEmail: 'emma@securevault-admin.com',
-        actionType: 'LOGIN',
-        target: 'ADMIN-004',
-        targetType: 'ADMIN',
-        details: {
-          loginMethod: 'EMAIL_PASSWORD',
-          twoFactorUsed: false,
-          failureReason: 'Invalid password'
-        },
-        ipAddress: '203.45.67.89',
-        userAgent: 'Chrome 119 / Windows',
-        status: 'FAILED'
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        const response = await apiGet(API_ENDPOINTS.admin.logs);
+        if (response.success && Array.isArray(response.data)) {
+          const mappedLogs: AuditLog[] = response.data.map((log: any) => ({
+            id: log.id,
+            timestamp: log.timestamp,
+            actionType: log.action,
+            target: log.entityId || 'N/A',
+            targetType: log.action.includes('ASSET') ? 'ASSET' :
+              log.action.includes('NOMINEE') ? 'NOMINEE' :
+                log.action.includes('CLAIM') ? 'VERIFICATION' : 'USER',
+            details: log.details,
+            userName: log.userName,
+            userType: log.userType,
+            status: 'SUCCESS' // All retrieved logs are successful actions
+          }));
+          setLogs(mappedLogs);
+          setFilteredLogs(mappedLogs);
+        }
+      } catch (err) {
+        console.error('Failed to fetch logs:', err);
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    setTimeout(() => {
-      setLogs(mockLogs);
-      setFilteredLogs(mockLogs);
-      setLoading(false);
-    }, 800);
+    fetchLogs();
   }, []);
 
   // Apply filters
@@ -202,19 +87,16 @@ const AuditLogsPage = () => {
     if (filters.actionType) {
       result = result.filter(log => log.actionType === filters.actionType);
     }
-    if (filters.adminId) {
-      result = result.filter(log => log.adminEmail.toLowerCase().includes(filters.adminId.toLowerCase()));
-    }
-    if (filters.status) {
-      result = result.filter(log => log.status === filters.status);
+    if (filters.userType) {
+      result = result.filter(log => log.userType === filters.userType);
     }
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      result = result.filter(log => 
+      result = result.filter(log =>
         log.id.toLowerCase().includes(searchLower) ||
         log.target.toLowerCase().includes(searchLower) ||
-        log.adminEmail.toLowerCase().includes(searchLower) ||
-        JSON.stringify(log.details).toLowerCase().includes(searchLower)
+        log.userName.toLowerCase().includes(searchLower) ||
+        log.details.toLowerCase().includes(searchLower)
       );
     }
 
@@ -225,12 +107,13 @@ const AuditLogsPage = () => {
     const icons: Record<string, React.ReactNode> = {
       'LOGIN': <LogIn className="w-4 h-4" />,
       'LOGOUT': <LogOut className="w-4 h-4" />,
-      'APPROVE_VERIFICATION': <CheckCircle className="w-4 h-4" />,
-      'REJECT_VERIFICATION': <XCircle className="w-4 h-4" />,
-      'REQUEST_DOCS': <FileText className="w-4 h-4" />,
-      'VIEW_DOCUMENT': <Eye className="w-4 h-4" />,
-      'VIEW_USER': <User className="w-4 h-4" />,
-      'SYSTEM_CONFIG': <Settings className="w-4 h-4" />
+      'ASSET_UPLOAD': <FileText className="w-4 h-4" />,
+      'ASSET_UPDATE': <Settings className="w-4 h-4" />,
+      'ASSET_DELETE': <XCircle className="w-4 h-4" />,
+      'NOMINEE_CLAIM_SUBMITTED': <CheckCircle className="w-4 h-4" />,
+      'NOMINEE_IDENTITY_CONFIRMED': <CheckCircle className="w-4 h-4" />,
+      'USER_REGISTRATION': <User className="w-4 h-4" />,
+      'VERIFICATION_REVIEW': <Shield className="w-4 h-4" />
     };
     return icons[actionType] || <AlertCircle className="w-4 h-4" />;
   };
@@ -239,12 +122,13 @@ const AuditLogsPage = () => {
     const colors: Record<string, string> = {
       'LOGIN': 'text-blue-600 bg-blue-50',
       'LOGOUT': 'text-gray-600 bg-gray-50',
-      'APPROVE_VERIFICATION': 'text-green-600 bg-green-50',
-      'REJECT_VERIFICATION': 'text-red-600 bg-red-50',
-      'REQUEST_DOCS': 'text-yellow-600 bg-yellow-50',
-      'VIEW_DOCUMENT': 'text-purple-600 bg-purple-50',
-      'VIEW_USER': 'text-indigo-600 bg-indigo-50',
-      'SYSTEM_CONFIG': 'text-orange-600 bg-orange-50'
+      'ASSET_UPLOAD': 'text-green-600 bg-green-50',
+      'ASSET_UPDATE': 'text-yellow-600 bg-yellow-50',
+      'ASSET_DELETE': 'text-red-600 bg-red-50',
+      'NOMINEE_CLAIM_SUBMITTED': 'text-purple-600 bg-purple-50',
+      'NOMINEE_IDENTITY_CONFIRMED': 'text-indigo-600 bg-indigo-50',
+      'USER_REGISTRATION': 'text-blue-600 bg-blue-50',
+      'VERIFICATION_REVIEW': 'text-orange-600 bg-orange-50'
     };
     return colors[actionType] || 'text-gray-600 bg-gray-50';
   };
@@ -272,16 +156,15 @@ const AuditLogsPage = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Timestamp', 'Admin ID', 'Admin Email', 'Action Type', 'Target', 'Status', 'IP Address', 'Details'];
+    const headers = ['Timestamp', 'User', 'Type', 'Action Type', 'Target', 'Status', 'Details'];
     const csvData = filteredLogs.map(log => [
       log.timestamp,
-      log.adminId,
-      log.adminEmail,
+      log.userName,
+      log.userType,
       log.actionType,
       log.target,
       log.status,
-      log.ipAddress,
-      JSON.stringify(log.details)
+      log.details
     ]);
 
     const csv = [headers, ...csvData].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
@@ -298,8 +181,7 @@ const AuditLogsPage = () => {
       dateFrom: '',
       dateTo: '',
       actionType: '',
-      adminId: '',
-      status: '',
+      userType: '', // Added userType
       search: ''
     });
   };
@@ -323,7 +205,7 @@ const AuditLogsPage = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <Shield className="w-8 h-8 text-blue-600" />
-              <h1 className="text-3xl font-bold text-gray-900">Audit Logs</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Activity Logs</h1>
             </div>
             <button
               onClick={exportToCSV}
@@ -333,7 +215,7 @@ const AuditLogsPage = () => {
               Export CSV
             </button>
           </div>
-          <p className="text-gray-600">Immutable audit trail • 7-year retention • Read-only access</p>
+          <p className="text-gray-600">Real-time system activity monitoring • Exclusive to Users and Nominees</p>
         </div>
 
         {/* Stats Cards */}
@@ -341,7 +223,7 @@ const AuditLogsPage = () => {
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Logs</p>
+                <p className="text-sm text-gray-600">Total Activity</p>
                 <p className="text-2xl font-bold text-gray-900">{filteredLogs.length}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
@@ -350,29 +232,29 @@ const AuditLogsPage = () => {
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Success Rate</p>
+                <p className="text-sm text-gray-600">User Activity</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {Math.round((filteredLogs.filter(l => l.status === 'SUCCESS').length / filteredLogs.length) * 100)}%
+                  {filteredLogs.filter(l => l.userType === 'USER').length}
                 </p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <User className="w-8 h-8 text-green-600" />
             </div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Failed Actions</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {filteredLogs.filter(l => l.status === 'FAILED').length}
+                <p className="text-sm text-gray-600">Nominee Activity</p>
+                <p className="text-2xl font-bold text-indigo-600">
+                  {filteredLogs.filter(l => l.userType === 'NOMINEE').length}
                 </p>
               </div>
-              <XCircle className="w-8 h-8 text-red-600" />
+              <ChevronUp className="w-8 h-8 text-indigo-600" />
             </div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Today's Activity</p>
+                <p className="text-sm text-gray-600">Today's Total</p>
                 <p className="text-2xl font-bold text-blue-600">
                   {filteredLogs.filter(l => new Date(l.timestamp).toDateString() === new Date().toDateString()).length}
                 </p>
@@ -391,7 +273,7 @@ const AuditLogsPage = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by ID, target, admin email, or details..."
+                  placeholder="Search by ID, target, name, or details..."
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -399,9 +281,8 @@ const AuditLogsPage = () => {
               </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
-                  showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
               >
                 <Filter className="w-4 h-4" />
                 Filters
@@ -438,26 +319,24 @@ const AuditLogsPage = () => {
                   >
                     <option value="">All Actions</option>
                     <option value="LOGIN">Login</option>
-                    <option value="LOGOUT">Logout</option>
-                    <option value="APPROVE_VERIFICATION">Approve Verification</option>
-                    <option value="REJECT_VERIFICATION">Reject Verification</option>
-                    <option value="REQUEST_DOCS">Request Documents</option>
-                    <option value="VIEW_DOCUMENT">View Document</option>
-                    <option value="VIEW_USER">View User</option>
-                    <option value="SYSTEM_CONFIG">System Config</option>
+                    <option value="USER_REGISTRATION">Registration</option>
+                    <option value="ASSET_UPLOAD">Asset Upload</option>
+                    <option value="ASSET_UPDATE">Asset Update</option>
+                    <option value="ASSET_DELETE">Asset Delete</option>
+                    <option value="NOMINEE_CLAIM_SUBMITTED">Claim Submitted</option>
+                    <option value="NOMINEE_IDENTITY_CONFIRMED">Identity Confirmed</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
                   <select
-                    value={filters.status}
-                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                    value={filters.userType}
+                    onChange={(e) => setFilters({ ...filters, userType: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   >
-                    <option value="">All Status</option>
-                    <option value="SUCCESS">Success</option>
-                    <option value="FAILED">Failed</option>
-                    <option value="PENDING">Pending</option>
+                    <option value="">All Types</option>
+                    <option value="USER">User</option>
+                    <option value="NOMINEE">Nominee</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -478,7 +357,7 @@ const AuditLogsPage = () => {
           {filteredLogs.length === 0 ? (
             <div className="text-center py-12">
               <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No logs found matching your filters</p>
+              <p className="text-gray-600">No activity logs found matching your filters</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -486,10 +365,9 @@ const AuditLogsPage = () => {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Entity</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target ID</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
                   </tr>
@@ -509,8 +387,8 @@ const AuditLogsPage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm">
-                            <div className="text-gray-900 font-medium">{log.adminId}</div>
-                            <div className="text-gray-500">{log.adminEmail}</div>
+                            <div className="text-gray-900 font-medium">{log.userName}</div>
+                            <div className="text-gray-500">{log.userType}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -524,9 +402,6 @@ const AuditLogsPage = () => {
                             <div className="text-gray-900 font-medium">{log.target}</div>
                             <div className="text-gray-500">{log.targetType}</div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{log.ipAddress}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadge(log.status)}`}>
@@ -545,48 +420,13 @@ const AuditLogsPage = () => {
                       </tr>
                       {expandedLog === log.id && (
                         <tr>
-                          <td colSpan={7} className="px-6 py-4 bg-gray-50">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                  <FileText className="w-4 h-4" />
-                                  Details
-                                </h4>
-                                <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-2">
-                                  {Object.entries(log.details).map(([key, value]) => (
-                                    <div key={key} className="flex">
-                                      <span className="text-sm font-medium text-gray-600 w-1/3">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                                      <span className="text-sm text-gray-900 w-2/3">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                  <Settings className="w-4 h-4" />
-                                  Metadata
-                                </h4>
-                                <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-2">
-                                  <div className="flex">
-                                    <span className="text-sm font-medium text-gray-600 w-1/3">User Agent:</span>
-                                    <span className="text-sm text-gray-900 w-2/3">{log.userAgent}</span>
-                                  </div>
-                                  <div className="flex">
-                                    <span className="text-sm font-medium text-gray-600 w-1/3">IP Address:</span>
-                                    <span className="text-sm text-gray-900 w-2/3">{log.ipAddress}</span>
-                                  </div>
-                                  <div className="flex">
-                                    <span className="text-sm font-medium text-gray-600 w-1/3">Log ID:</span>
-                                    <span className="text-sm text-gray-900 w-2/3">{log.id}</span>
-                                  </div>
-                                  <div className="flex">
-                                    <span className="text-sm font-medium text-gray-600 w-1/3">Status:</span>
-                                    <span className={`text-sm font-semibold w-2/3 ${log.status === 'SUCCESS' ? 'text-green-600' : log.status === 'FAILED' ? 'text-red-600' : 'text-yellow-600'}`}>
-                                      {log.status}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
+                          <td colSpan={6} className="px-6 py-4 bg-gray-50">
+                            <div className="bg-white p-4 rounded-lg border border-gray-200">
+                              <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                <FileText className="w-4 h-4" />
+                                Activity Details
+                              </h4>
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.details}</p>
                             </div>
                           </td>
                         </tr>

@@ -7,7 +7,10 @@ export const API_ENDPOINTS = {
   auth: {
     login: `${API_BASE_URL}/auth/login`,
     signup: `${API_BASE_URL}/auth/signup`,
+    sendOtp: `${API_BASE_URL}/auth/send-otp`,
     verifyOtp: `${API_BASE_URL}/auth/verify-otp`,
+    changePassword: `${API_BASE_URL}/auth/change-password`,
+    adminLogin: `${API_BASE_URL}/auth/admin/login`,
     logout: `${API_BASE_URL}/auth/logout`,
     refreshToken: `${API_BASE_URL}/auth/refresh`,
   },
@@ -23,8 +26,8 @@ export const API_ENDPOINTS = {
 
   // Digital Assets
   assets: {
-    list: `${API_BASE_URL}/assets`,
-    create: `${API_BASE_URL}/assets`,
+    list: `${API_BASE_URL}/assets/my`,
+    create: `${API_BASE_URL}/assets/upload`,
     get: (id: string) => `${API_BASE_URL}/assets/${id}`,
     update: (id: string) => `${API_BASE_URL}/assets/${id}`,
     delete: (id: string) => `${API_BASE_URL}/assets/${id}`,
@@ -32,19 +35,31 @@ export const API_ENDPOINTS = {
 
   // Nominees
   nominees: {
-    list: `${API_BASE_URL}/nominees`,
-    add: `${API_BASE_URL}/nominees`,
+    list: `${API_BASE_URL}/nominees/my`,
+    add: `${API_BASE_URL}/nominees/add`,
     update: (id: string) => `${API_BASE_URL}/nominees/${id}`,
     remove: (id: string) => `${API_BASE_URL}/nominees/${id}`,
     verify: `${API_BASE_URL}/nominees/verify`,
+    assignToAsset: (nomineeId: string, assetId: string) => `${API_BASE_URL}/nominees/${nomineeId}/assign/${assetId}`,
+    unassignFromAsset: (nomineeId: string, assetId: string) => `${API_BASE_URL}/nominees/${nomineeId}/unassign/${assetId}`,
+  },
+
+  // Verification
+  verification: {
+    verifyToken: (token: string) => `${API_BASE_URL}/verification/verify-token?token=${token}`,
+    confirmIdentity: `${API_BASE_URL}/verification/confirm-identity`,
+    submitClaim: `${API_BASE_URL}/verification/submit-claim`,
+    getStatus: (token: string) => `${API_BASE_URL}/verification/status?token=${token}`,
   },
 
   // Admin
   admin: {
     login: `${API_BASE_URL}/admin/login`,
-    dashboard: `${API_BASE_URL}/admin/verification-requests`,
-    approveRequest: (id: string) => `${API_BASE_URL}/admin/verification-requests/${id}/approve`,
-    rejectRequest: (id: string) => `${API_BASE_URL}/admin/verification-requests/${id}/reject`,
+    dashboard: `${API_BASE_URL}/admin/verification-requests`, // Alias for compatibility
+    verificationRequests: `${API_BASE_URL}/admin/verification-requests`,
+    stats: `${API_BASE_URL}/admin/stats`,
+    approveRequest: (id: string) => `${API_BASE_URL}/admin/verification-requests/${id}/review`,
+    rejectRequest: (id: string) => `${API_BASE_URL}/admin/verification-requests/${id}/review`,
     users: `${API_BASE_URL}/admin/users`,
     logs: `${API_BASE_URL}/admin/logs`,
   },
@@ -57,9 +72,14 @@ export const API_ENDPOINTS = {
 }
 
 // Helper function to get auth token from localStorage
+// Prioritizes adminToken when on admin pages to ensure ROLE_ADMIN is available
 export function getAuthToken(): string | null {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("authToken")
+    const isAdminPage = window.location.pathname.startsWith("/admin")
+    if (isAdminPage) {
+      return localStorage.getItem("adminToken") || localStorage.getItem("authToken")
+    }
+    return localStorage.getItem("authToken") || localStorage.getItem("adminToken")
   }
   return null
 }

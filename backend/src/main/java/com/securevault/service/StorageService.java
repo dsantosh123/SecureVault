@@ -1,31 +1,61 @@
 package com.securevault.service;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.gridfs.GridFsTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
-import java.nio.file.*;
-import java.util.UUID;
+import org.bson.types.ObjectId;
+import static org.springframework.data.mongodb.core.query.Criteria.where;
+import static org.springframework.data.mongodb.core.query.Query.query;
 
 @Service
 public class StorageService {
 
-    @Value("${storage.upload-dir}") // This reads "uploads/" from your application.yml
-    private String uploadDir;
+    private final GridFsTemplate gridFsTemplate;
 
+    public StorageService(GridFsTemplate gridFsTemplate) {
+        this.gridFsTemplate = gridFsTemplate;
+    }
+
+    /**
+     * Saves a file to MongoDB Atlas using GridFS
+     * @param file The file to save
+     * @return The unique ObjectId (as String) of the saved file
+     */
     public String saveFile(MultipartFile file) throws IOException {
-        // 1. Create the uploads folder if it doesn't exist
-        Path root = Paths.get(uploadDir);
-        if (!Files.exists(root)) {
-            Files.createDirectories(root);
+        // Store the file in GridFS and get the generated ID
+        ObjectId fileId = gridFsTemplate.store(
+            file.getInputStream(), 
+            file.getOriginalFilename(), 
+            file.getContentType()
+        );
+
+        return fileId.toString();
+    }
+
+    /**
+     * Retrieves a file from MongoDB GridFS as a Resource
+     * @param fileId The ObjectId string
+     * @return GridFsResource
+     */
+    public org.springframework.data.mongodb.gridfs.GridFsResource getFileResource(String fileId) {
+        com.mongodb.client.gridfs.model.GridFSFile file = gridFsTemplate.findOne(query(where("_id").is(new ObjectId(fileId))));
+        if (file == null) {
+            throw new RuntimeException("File not found with ID: " + fileId);
         }
+        return gridFsTemplate.getResource(file);
+    }
 
-        // 2. Give the file a unique name (to prevent overwriting)
-        String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-        
-        // 3. Save the file to the folder
-        Files.copy(file.getInputStream(), root.resolve(fileName));
-
-        return fileName; // This becomes our 's3Key' for now
+    /**
+     * Deletes a file from MongoDB GridFS by its ObjectId string
+     * @param fileId The ObjectId string of the file to delete
+     */
+    public void deleteFile(String fileId) {
+        try {
+            gridFsTemplate.delete(query(where("_id").is(new ObjectId(fileId))));
+        } catch (Exception e) {
+            // Log but don't throw — asset metadata deletion should still proceed
+            System.err.println("Warning: Could not delete GridFS file " + fileId + ": " + e.getMessage());
+        }
     }
 }

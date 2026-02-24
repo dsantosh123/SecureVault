@@ -6,6 +6,8 @@ import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Lock, Users, Clock, Calendar, Zap, TrendingUp, Shield, CheckCircle, AlertCircle, Eye, Download, Bell } from "lucide-react"
+import { API_ENDPOINTS, getAuthToken } from "@/lib/api-config"
+import { apiGet } from "@/lib/api-client"
 
 interface DashboardOverview {
   totalAssets: number
@@ -13,6 +15,7 @@ interface DashboardOverview {
   pendingTransfers: number
   lastLoginDate: string
   inactivityDaysRemaining: number
+  inactivityDaysConfigured: number
   currentPlan: string
   storageUsed: number
   storageLimit: number
@@ -34,6 +37,7 @@ export default function DashboardPage() {
     pendingTransfers: 0,
     lastLoginDate: "",
     inactivityDaysRemaining: 0,
+    inactivityDaysConfigured: 180,
     currentPlan: "plus",
     storageUsed: 2.5,
     storageLimit: 5,
@@ -47,54 +51,64 @@ export default function DashboardPage() {
     const checkSessionAndFetchData = async () => {
       console.log("🔍 Checking session...")
       const userData = localStorage.getItem("user");
-      
-      if (!userData) {
-        console.log("❌ No user found, redirecting...");
+      const token = getAuthToken();
+
+      if (!userData || !token) {
+        console.log("❌ No user or token found, redirecting...");
         router.push("/login");
         return;
       }
 
       try {
         const parsedUser = JSON.parse(userData);
-        
-        // Match the field 'id' from your Login Page
-        if (!parsedUser.id) {
-          console.log("❌ User ID missing in storage, redirecting...");
-          router.push("/login");
-          return;
-        }
-        
         setUser(parsedUser);
 
-        // 3. FETCH REAL DATA
-        // Use Promise.all to fetch both simultaneously for better performance
+        // 3. FETCH REAL DATA using refreshed API
         const [assetRes, nomineeRes] = await Promise.all([
-          fetch(`http://localhost:8080/api/assets/user/${parsedUser.id}`),
-          fetch(`http://localhost:8080/api/nominees/user/${parsedUser.id}`)
+          apiGet<any[]>(API_ENDPOINTS.assets.list),
+          apiGet<any[]>(API_ENDPOINTS.nominees.list)
         ]);
 
-        const assets = assetRes.ok ? await assetRes.json() : [];
-        const nominees = nomineeRes.ok ? await nomineeRes.json() : [];
+        const assets = assetRes.success ? assetRes.data || [] : [];
+        const nominees = nomineeRes.success ? nomineeRes.data || [] : [];
 
-        // 4. Update the Overview with REAL counts
+        // 4. Fetch user profile for dynamic inactivity calculation
+        const profileRes = await apiGet<any>(API_ENDPOINTS.users.profile);
+
+        // Calculate remaining inactivity days dynamically
+        let remainingDays = 180; // fallback
+        let configuredDays = 180;
+        if (profileRes.success && profileRes.data) {
+          configuredDays = profileRes.data.inactivityDays || 180;
+          if (profileRes.data.lastLoginAt) {
+            const lastLogin = new Date(profileRes.data.lastLoginAt);
+            const now = new Date();
+            const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
+            remainingDays = Math.max(0, configuredDays - daysSinceLogin);
+          }
+        }
+
+        // 5. Update the Overview with REAL counts
         setOverview(prev => ({
           ...prev,
           totalAssets: assets.length,
           activeNominees: nominees.length,
-          lastLoginDate: new Date().toLocaleDateString(),
-          inactivityDaysRemaining: 180, // You can make this dynamic later
+          lastLoginDate: profileRes.success && profileRes.data?.lastLoginAt
+            ? new Date(profileRes.data.lastLoginAt).toLocaleDateString()
+            : new Date().toLocaleDateString(),
+          inactivityDaysRemaining: remainingDays,
+          inactivityDaysConfigured: configuredDays,
         }));
 
       } catch (error) {
-        console.error("❌ Fetch error - likely backend is down:", error);
-        // NOTE: We don't clear storage here so the user stays logged in
+        console.error("❌ Fetch error:", error);
       } finally {
         setLoading(false);
       }
     }
 
     checkSessionAndFetchData();
-  }, [router]); // Router is now a dependency
+  }, [router]);
 
   const planConfig: any = {
     free: { name: "Free", color: "bg-gray-600", assetLimit: 3, videoMessage: false },
@@ -104,7 +118,7 @@ export default function DashboardPage() {
 
   const currentPlanConfig = planConfig[overview.currentPlan]
   const storagePercent = (overview.storageUsed / overview.storageLimit) * 100
-  const inactivityPercent = ((365 - overview.inactivityDaysRemaining) / 365) * 100
+  const inactivityPercent = ((overview.inactivityDaysConfigured - overview.inactivityDaysRemaining) / overview.inactivityDaysConfigured) * 100
 
   const overviewCards = [
     {
@@ -172,7 +186,7 @@ export default function DashboardPage() {
       {showSecurityTip && (
         <Card className="p-6 border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-accent/5 to-primary/5 relative overflow-hidden group hover:border-primary/40 transition-all duration-300">
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-          <button 
+          <button
             onClick={() => setShowSecurityTip(false)}
             className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -190,7 +204,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="w-full h-3 rounded-full bg-muted/50 overflow-hidden backdrop-blur-sm">
-                <div 
+                <div
                   className="h-full bg-gradient-to-r from-primary via-accent to-primary rounded-full transition-all duration-1000 animate-pulse"
                   style={{ width: `${securityScore}%` }}
                 />
@@ -238,7 +252,7 @@ export default function DashboardPage() {
           {overview.currentPlan !== "premium" && (
             <Link href="/pricing">
               <Button className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all group/btn">
-                Upgrade Plan 
+                Upgrade Plan
                 <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
               </Button>
             </Link>
@@ -304,7 +318,7 @@ export default function DashboardPage() {
             <p className="text-2xl font-bold text-foreground">{loading ? "-" : overview.lastLoginDate}</p>
             <p className="text-xs text-muted-foreground">Keep logging in regularly to maintain access</p>
           </div>
-          
+
           <div className="space-y-3 group">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
@@ -325,7 +339,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="space-y-3 group">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
@@ -372,7 +386,7 @@ export default function DashboardPage() {
               </div>
               <Link href="/dashboard/add-asset">
                 <Button className="mt-4 w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-md hover:shadow-lg transition-all group/btn">
-                  Add Asset 
+                  Add Asset
                   <ArrowRight className="w-4 h-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -395,7 +409,7 @@ export default function DashboardPage() {
               </div>
               <Link href="/dashboard/assets">
                 <Button variant="outline" className="mt-4 w-full border-border hover:bg-muted bg-transparent hover:border-primary/50 transition-all group/btn">
-                  View Assets 
+                  View Assets
                   <ArrowRight className="w-4 h-4 ml-2 group-hover/btn:translate-x-1 transition-transform" />
                 </Button>
               </Link>
@@ -423,8 +437,8 @@ export default function DashboardPage() {
               activities.map((activity, idx) => {
                 const ActivityIcon = activity.icon
                 return (
-                  <div 
-                    key={activity.id} 
+                  <div
+                    key={activity.id}
                     className="flex gap-4 group hover:bg-muted/30 p-3 rounded-lg transition-all duration-300"
                     style={{ animationDelay: `${idx * 50}ms` }}
                   >

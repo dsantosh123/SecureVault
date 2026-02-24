@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, Lock, Home, Eye, EyeOff, Mail, KeyRound, Loader2, ArrowLeft, Shield } from "lucide-react"
+import { API_ENDPOINTS, setAuthToken } from "@/lib/api-config"
+import { apiPost } from "@/lib/api-client"
 
 export default function EnhancedLoginPage() {
   const router = useRouter()
@@ -20,7 +22,7 @@ export default function EnhancedLoginPage() {
   const [rememberMe, setRememberMe] = useState(false)
   const [emailTouched, setEmailTouched] = useState(false)
   const [passwordTouched, setPasswordTouched] = useState(false)
-  
+
   // Forgot Password State
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
@@ -49,88 +51,84 @@ export default function EnhancedLoginPage() {
     setPasswordTouched(true)
 
     if (!email || !password) {
-        setError("Please fill in all fields")
-        return
+      setError("Please fill in all fields")
+      return
     }
 
     if (!validateEmail(email)) {
-        setError("Please enter a valid email address")
-        return
+      setError("Please enter a valid email address")
+      return
     }
 
     setIsLoading(true)
 
     try {
-        // ✅ Call your Spring Boot backend with BCrypt password verification
-        const response = await fetch('http://localhost:8080/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                email, 
-                password // ✅ Send raw password - backend will verify with BCrypt
-            })
-        })
+      const response = await apiPost<any>(API_ENDPOINTS.auth.login, {
+        email,
+        password
+      })
 
-        if (!response.ok) {
-            const errorText = await response.text()
-            throw new Error(errorText || "Invalid email or password")
-        }
+      if (!response.success) {
+        throw new Error(response.error || "Invalid email or password")
+      }
 
-        const userData = await response.json()
+      const { token, user } = response.data
 
-        // ✅ Store user session data
-        const sessionData = {
-            id: userData.id,
-            email: userData.email,
-            fullName: userData.fullName,
-            loginTime: new Date().toISOString(),
-        }
+      // ✅ Store JWT token
+      setAuthToken(token)
 
-        // ✅ Remember me functionality
+      // ✅ Store user session data
+      const sessionData = {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        loginTime: new Date().toISOString(),
+      }
+
+      // ✅ Remember me functionality
+      if (typeof window !== "undefined") {
         if (rememberMe) {
-            localStorage.setItem("user", JSON.stringify(sessionData))
+          localStorage.setItem("user", JSON.stringify(sessionData))
         } else {
-            sessionStorage.setItem("user", JSON.stringify(sessionData))
+          sessionStorage.setItem("user", JSON.stringify(sessionData))
         }
+      }
 
-        // ✅ Redirect to dashboard
-        router.push("/dashboard")
+      // ✅ Redirect to dashboard
+      router.push("/dashboard")
     } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : "Invalid email or password"
-        setError(errorMessage)
+      const errorMessage = err instanceof Error ? err.message : "Invalid email or password"
+      setError(errorMessage)
     } finally {
-        setIsLoading(false)
+      setIsLoading(false)
     }
   }
 
   const handleForgotPassword = async () => {
-  if (!resetEmail || !validateEmail(resetEmail)) {
-    setError("Please enter a valid email address")
-    return
-  }
-
-  setResetLoading(true)
-  setError("")
-
-  try {
-    const response = await fetch('http://localhost:8080/api/auth/forgot-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: resetEmail })
-    })
-
-    if (!response.ok) {
-      throw new Error("Failed to send reset email")
+    if (!resetEmail || !validateEmail(resetEmail)) {
+      setError("Please enter a valid email address")
+      return
     }
 
-    setResetEmailSent(true)
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : "Failed to send reset email. Please try again."
-    setError(errorMessage)
-  } finally {
-    setResetLoading(false)
+    setResetLoading(true)
+    setError("")
+
+    try {
+      // Use cast as any for forgot-password if it's missing in types, or just use string
+      const response = await apiPost((API_ENDPOINTS.auth as any).forgotPassword || `${API_ENDPOINTS.auth.login.replace('/login', '/forgot-password')}`, { email: resetEmail })
+
+      if (!response.success) {
+        throw new Error(response.error || "Failed to send reset email")
+      }
+
+      setResetEmailSent(true)
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to send reset email. Please try again."
+      setError(errorMessage)
+    } finally {
+      setResetLoading(false)
+    }
   }
-}
 
   const resetForgotPasswordForm = () => {
     setShowForgotPassword(false)
@@ -159,8 +157,8 @@ export default function EnhancedLoginPage() {
             </div>
             <h1 className="text-4xl font-bold text-foreground mb-2">Reset Password</h1>
             <p className="text-muted-foreground">
-              {resetEmailSent 
-                ? "Check your email for reset instructions" 
+              {resetEmailSent
+                ? "Check your email for reset instructions"
                 : "Enter your email to receive a password reset link"}
             </p>
           </div>
@@ -286,9 +284,8 @@ export default function EnhancedLoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   onBlur={() => setEmailTouched(true)}
                   onKeyPress={(e) => handleKeyPress(e, handleSubmit)}
-                  className={`bg-input border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring transition-all pl-4 pr-10 h-11 ${
-                    emailError ? "border-red-500 focus:ring-red-500" : ""
-                  }`}
+                  className={`bg-input border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring transition-all pl-4 pr-10 h-11 ${emailError ? "border-red-500 focus:ring-red-500" : ""
+                    }`}
                   disabled={isLoading}
                 />
                 {email && validateEmail(email) && (
@@ -319,9 +316,8 @@ export default function EnhancedLoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   onBlur={() => setPasswordTouched(true)}
                   onKeyPress={(e) => handleKeyPress(e, handleSubmit)}
-                  className={`bg-input border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring transition-all pr-10 h-11 ${
-                    passwordError ? "border-red-500 focus:ring-red-500" : ""
-                  }`}
+                  className={`bg-input border-border text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring transition-all pr-10 h-11 ${passwordError ? "border-red-500 focus:ring-red-500" : ""
+                    }`}
                   disabled={isLoading}
                 />
                 <button

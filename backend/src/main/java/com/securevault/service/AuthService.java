@@ -1,32 +1,26 @@
 package com.securevault.service;
 
 import com.securevault.dto.UserRegistrationRequest;
-import com.securevault.model.PasswordResetToken;
 import com.securevault.model.User;
-import com.securevault.repository.PasswordResetTokenRepository;
 import com.securevault.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 @Service
 public class AuthService {
     
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final PasswordResetTokenRepository resetTokenRepository; // ✅ ADD THIS
+    private final ActivityLogService activityLogService;
     
-    // ✅ UPDATE CONSTRUCTOR - Add PasswordResetTokenRepository
-    public AuthService(UserRepository userRepository, 
-                      PasswordEncoder passwordEncoder,
-                      PasswordResetTokenRepository resetTokenRepository) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, ActivityLogService activityLogService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.resetTokenRepository = resetTokenRepository; // ✅ ADD THIS
+        this.activityLogService = activityLogService;
     }
     
-    // ✅ EXISTING METHOD - NO CHANGES
-    @Transactional 
     public User registerUser(UserRegistrationRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new RuntimeException("Email already registered!");
@@ -36,65 +30,54 @@ public class AuthService {
         newUser.setEmail(request.getEmail());
         newUser.setFullName(request.getFullName());
         newUser.setCountry(request.getCountry());
-        
-        // 🔑 THE CRITICAL FIX: Hash the password BEFORE saving
+        newUser.setAccountType("USER"); // Default role
         newUser.setPassword(passwordEncoder.encode(request.getPassword()));
+        newUser.setInactivityDays(180); // Default inactivity period: 180 days
+        newUser.setLastLoginAt(java.time.LocalDateTime.now());
         
-        return userRepository.save(newUser);
+        User saved = userRepository.save(newUser);
+        activityLogService.log(saved.getId(), saved.getFullName(), "USER_REGISTRATION", "New user registered with email: " + saved.getEmail(), saved.getId(), "USER");
+        return saved;
     }
     
-    // ✅ EXISTING METHOD - NO CHANGES
     public User login(String email, String password) {
-        return userRepository.findByEmail(email)
-                .filter(user -> passwordEncoder.matches(password, user.getPassword()))
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
-    }
-    
-    // ✅ NEW METHOD - Create Password Reset Token
-    @Transactional
-    public PasswordResetToken createPasswordResetToken(String email) {
-        // Check if user exists
         User user = userRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+                .filter(userObj -> passwordEncoder.matches(password, userObj.getPassword()))
+                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
         
-        // Delete any existing tokens for this email
-        resetTokenRepository.findByEmail(email)
-            .ifPresent(resetTokenRepository::delete);
+        user.setLastLoginAt(java.time.LocalDateTime.now());
+        User saved = userRepository.save(user);
         
-        // Create new token
-        PasswordResetToken resetToken = new PasswordResetToken(email);
-        return resetTokenRepository.save(resetToken);
+        // Log activity based on role
+        String type = "ADMIN".equalsIgnoreCase(saved.getAccountType()) ? "ADMIN" : "USER";
+        activityLogService.log(saved.getId(), saved.getFullName(), "LOGIN", "User logged into the system", saved.getId(), type);
+        
+        return saved;
     }
-    
-    // ✅ NEW METHOD - Reset Password
-    @Transactional
-    public void resetPassword(String token, String newPassword) {
-        // Find token
-        PasswordResetToken resetToken = resetTokenRepository.findByToken(token)
-            .orElseThrow(() -> new RuntimeException("Invalid reset token"));
-        
-        // Check if expired
-        if (resetToken.isExpired()) {
-            throw new RuntimeException("Reset token has expired");
+
+    public User adminLogin(String email, String password) {
+        // Calling login directly will log the event. 
+        // We filter out ADMIN logs in the admin dashboard anyway.
+        User user = login(email, password);
+        if (user.getAccountType() == null || !user.getAccountType().equalsIgnoreCase("ADMIN")) {
+            throw new RuntimeException("Access denied. User does not have administrative privileges.");
         }
-        
-        // Check if already used
-        if (resetToken.isUsed()) {
-            throw new RuntimeException("Reset token has already been used");
+        return user;
+    }
+
+    public Optional<User> findById(String id) {
+        return userRepository.findById(id);
+    }
+
+    public void changePassword(String userId, String currentPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new RuntimeException("Incorrect current password");
         }
-        
-        // Find user
-        User user = userRepository.findByEmail(resetToken.getEmail())
-            .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        // Update password with BCrypt hashing
+
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
-        
-        // Mark token as used
-        resetToken.setUsed(true);
-        resetTokenRepository.save(resetToken);
-        
-        System.out.println("✅ Password reset successful for: " + user.getEmail());
     }
 }

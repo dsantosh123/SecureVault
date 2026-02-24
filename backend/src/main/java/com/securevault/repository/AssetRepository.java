@@ -1,17 +1,16 @@
 package com.securevault.repository;
 
 import com.securevault.model.Asset;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
-import java.util.UUID;
 
 @Repository
-public interface AssetRepository extends JpaRepository<Asset, UUID> {
+public interface AssetRepository extends MongoRepository<Asset, String> {
     
     // Find all assets belonging to a user
-    List<Asset> findByUserId(UUID userId);
+    List<Asset> findByUserId(String userId);
 
-    // Find all assets assigned to a specific nominee
-    List<Asset> findByAssignedNomineeId(UUID nomineeId);
+    // Find all assets assigned to a specific nominee (nomineeIds is a list)
+    List<Asset> findByNomineeIdsContaining(String nomineeId);
 }

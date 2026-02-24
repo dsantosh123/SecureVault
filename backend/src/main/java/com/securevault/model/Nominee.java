@@ -1,92 +1,54 @@
 package com.securevault.model;
 
-import jakarta.persistence.*;
 import lombok.*;
-import java.util.UUID;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
-@Entity                  // Tells Spring: "Create a table for Nominees"
-@Table(name = "nominees")
-@Data                    // Generates getters and setters
-@NoArgsConstructor       // Required for JPA
-@AllArgsConstructor      // Required for @Builder
-@Builder                 // Allows us to create Nominee objects easily
+@Document(collection = "nominees")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Nominee {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    private String id;
 
-    @Column(nullable = false)
+    @NotBlank(message = "Name is required")
     private String name;
 
-    @Column(nullable = false)
+    @NotBlank(message = "Email is required")
+    @Email(message = "Invalid email format")
     private String email;
 
     private String relationship;
-
     private String phoneNumber;
 
-    // This connects the Nominee to the User who added them
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
+    private String userId;
 
-    @Column(columnDefinition = "boolean default false")
     private Boolean identityConfirmed = false;
 
-    public void setUser(User user) {
-        this.user = user;
-    }
+    // Standard getters and setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
-	public UUID getId() {
-		return id;
-	}
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-	public void setId(UUID id) {
-		this.id = id;
-	}
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
-	public String getName() {
-		return name;
-	}
+    public String getRelationship() { return relationship; }
+    public void setRelationship(String relationship) { this.relationship = relationship; }
 
-	public void setName(String name) {
-		this.name = name;
-	}
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
 
-	public String getEmail() {
-		return email;
-	}
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 
-	public void setEmail(String email) {
-		this.email = email;
-	}
-
-	public String getRelationship() {
-		return relationship;
-	}
-
-	public void setRelationship(String relationship) {
-		this.relationship = relationship;
-	}
-
-	public String getPhoneNumber() {
-		return phoneNumber;
-	}
-
-	public void setPhoneNumber(String phoneNumber) {
-		this.phoneNumber = phoneNumber;
-	}
-
-	public Boolean getIdentityConfirmed() {
-		return identityConfirmed;
-	}
-
-	public void setIdentityConfirmed(Boolean identityConfirmed) {
-		this.identityConfirmed = identityConfirmed;
-	}
-
-	public User getUser() {
-		return user;
-	}
+    public Boolean getIdentityConfirmed() { return identityConfirmed; }
+    public void setIdentityConfirmed(Boolean identityConfirmed) { this.identityConfirmed = identityConfirmed; }
 }

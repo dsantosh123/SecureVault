@@ -6,18 +6,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { 
-  AlertCircle, 
-  CheckCircle, 
-  Lock, 
-  Mail, 
-  User, 
-  Globe, 
-  Shield, 
+import {
+  AlertCircle,
+  CheckCircle,
+  Lock,
+  Mail,
+  User,
+  Globe,
+  Shield,
   Sparkles,
   Eye,
   EyeOff
 } from "lucide-react"
+import { API_ENDPOINTS, setAuthToken } from "@/lib/api-config"
+import { apiPost } from "@/lib/api-client"
 
 export default function SignUpPage() {
   const [fullName, setFullName] = useState("")
@@ -46,7 +48,7 @@ export default function SignUpPage() {
   }
 
   const passwordStrength = calculatePasswordStrength(password)
-  
+
   const getPasswordStrengthLabel = (strength: number) => {
     if (strength <= 1) return { label: "Weak", color: "bg-red-500", textColor: "text-red-600" }
     if (strength <= 2) return { label: "Fair", color: "bg-orange-500", textColor: "text-orange-600" }
@@ -55,7 +57,6 @@ export default function SignUpPage() {
     return { label: "Very Strong", color: "bg-green-500", textColor: "text-green-600" }
   }
 
-  // ✅ UPDATED: Actually sends OTP to email
   const handleStep1Submit = async () => {
     setError("")
     setIsLoading(true)
@@ -91,15 +92,10 @@ export default function SignUpPage() {
         return
       }
 
-      // ✅ REAL OTP REQUEST to backend
-      const response = await fetch("http://localhost:8080/api/auth/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
+      const response = await apiPost((API_ENDPOINTS.auth as any).sendOtp || `${API_ENDPOINTS.auth.login.replace('/login', '/send-otp')}`, { email })
 
-      if (!response.ok) {
-        throw new Error("Failed to send OTP")
+      if (!response.success) {
+        throw new Error(response.error || "Failed to send OTP")
       }
 
       setCurrentStep(2)
@@ -111,7 +107,6 @@ export default function SignUpPage() {
     }
   }
 
-  // ✅ UPDATED: Sends OTP for verification
   const handleStep2Submit = async () => {
     setError("")
     setIsLoading(true)
@@ -123,35 +118,32 @@ export default function SignUpPage() {
         return
       }
 
-      // ✅ Now includes OTP in the request
-      const response = await fetch("http://localhost:8080/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          fullName,
-          accountType,
-          country,
-          otp, // ✅ Send OTP for backend verification
-        }),
+      const response = await apiPost<any>(API_ENDPOINTS.auth.signup, {
+        email,
+        password,
+        fullName,
+        accountType,
+        country,
+        otp,
       })
 
-      if (!response.ok) {
-        const errorData = await response.text()
-        throw new Error(errorData || "Signup failed")
+      if (!response.success) {
+        throw new Error(response.error || "Signup failed")
       }
 
-      const savedUser = await response.json()
-      
-      localStorage.setItem("user", JSON.stringify({ 
-        id: savedUser.id, 
-        email: savedUser.email, 
-        fullName: savedUser.fullName 
-      }))
+      const { token, user } = response.data
 
-      // Redirect to questions page
-      window.location.href = "/questions"
+      setAuthToken(token)
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify({
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName
+        }))
+      }
+
+      window.location.href = "/dashboard"
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Invalid OTP or signup failed"
       setError(errorMessage)
@@ -320,11 +312,10 @@ export default function SignUpPage() {
                 )}
               </div>
 
-              <div className={`flex items-start gap-3 p-4 rounded-xl border transition-all ${
-                encryptionConfirmed 
-                  ? "border-blue-500 bg-blue-50" 
+              <div className={`flex items-start gap-3 p-4 rounded-xl border transition-all ${encryptionConfirmed
+                  ? "border-blue-500 bg-blue-50"
                   : "border-gray-300 bg-gray-50"
-              }`}>
+                }`}>
                 <input
                   type="checkbox"
                   id="encryption"

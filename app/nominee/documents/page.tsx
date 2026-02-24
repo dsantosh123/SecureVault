@@ -3,6 +3,8 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, Upload, FileText, CheckCircle, AlertCircle, Loader2, ArrowRight, Clock, X, File } from 'lucide-react';
+import { API_ENDPOINTS } from "@/lib/api-config";
+import { apiGet, apiPost } from "@/lib/api-client";
 
 // TypeScript interfaces
 interface TokenData {
@@ -10,33 +12,31 @@ interface TokenData {
   nomineeId: string;
   userId: string;
   deceasedName: string;
-  identityConfirmed: boolean;
-  confirmedName: string;
-  relationship: string;
+  nomineeNameExpected: string;
 }
 
 function DocumentsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [error, setError] = useState('');
-  
+
   // File upload states
   const [deathCertificate, setDeathCertificate] = useState<File | null>(null);
   const [idProof, setIdProof] = useState<File | null>(null);
   const [legalDeclaration, setLegalDeclaration] = useState(false);
   const [authorizationDeclaration, setAuthorizationDeclaration] = useState(false);
-  
+
   // Upload progress
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     const token = searchParams.get('token');
-    
+
     if (!token) {
       router.push('/nominee/verify');
       return;
@@ -48,27 +48,14 @@ function DocumentsContent() {
   const verifyToken = async (token: string) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/nominee/verify-token?token=${token}`);
-      const data = await response.json();
+      const response = await apiGet<TokenData>(API_ENDPOINTS.verification.verifyToken(token));
 
-      if (!response.ok || !data.valid) {
+      if (!response.success || !response.data?.valid) {
         router.push('/nominee/invalid');
         return;
       }
 
-      // Check if identity was confirmed
-      // TODO: Replace with actual check from database
-      // if (!data.identityConfirmed) {
-      //   router.push(`/nominee/identity?token=${token}`);
-      //   return;
-      // }
-
-      setTokenData({
-        ...data,
-        identityConfirmed: true, // DEMO: set to true for testing
-        confirmedName: 'Raj Sharma', // DEMO
-        relationship: 'Son' // DEMO
-      });
+      setTokenData(response.data);
       setLoading(false);
     } catch (err) {
       console.error('Token verification error:', err);
@@ -92,7 +79,7 @@ function DocumentsContent() {
     }
 
     setError('');
-    
+
     if (type === 'death') {
       setDeathCertificate(file);
     } else {
@@ -113,7 +100,7 @@ function DocumentsContent() {
   const handleDrop = (e: React.DragEvent, type: 'death' | 'id') => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileSelect(file, type);
@@ -153,12 +140,8 @@ function DocumentsContent() {
     try {
       const token = searchParams.get('token');
       const formData = new FormData();
-      formData.append('token', token || '');
-      formData.append('deathCertificate', deathCertificate);
-      if (idProof) {
-        formData.append('idProof', idProof);
-      }
-      formData.append('legalDeclaration', 'true');
+      formData.append('nomineeId', tokenData?.nomineeId || '');
+      formData.append('file', deathCertificate);
 
       // Simulate upload progress
       const progressInterval = setInterval(() => {
@@ -171,18 +154,13 @@ function DocumentsContent() {
         });
       }, 200);
 
-      const response = await fetch('/api/nominee/documents/upload', {
-        method: 'POST',
-        body: formData
-      });
+      const response = await apiPost<any>(API_ENDPOINTS.verification.submitClaim, formData);
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to upload documents');
+      if (!response.success) {
+        setError(response.error || 'Failed to upload documents');
         setSubmitting(false);
         setUploadProgress(0);
         return;
@@ -256,8 +234,7 @@ function DocumentsContent() {
               <div className="flex-1">
                 <div className="font-semibold text-green-900">Identity Confirmed</div>
                 <div className="text-sm text-green-700 mt-1">
-                  Name: <span className="font-medium">{tokenData?.confirmedName}</span> • 
-                  Relationship: <span className="font-medium">{tokenData?.relationship}</span>
+                  Verified for Deceased: <span className="font-medium">{tokenData?.deceasedName}</span>
                 </div>
               </div>
             </div>
@@ -269,17 +246,16 @@ function DocumentsContent() {
               <label className="block text-sm font-semibold text-gray-900 mb-3">
                 1. Death Certificate <span className="text-red-500">*</span> <span className="text-xs font-normal text-gray-500">(Required)</span>
               </label>
-              
+
               {!deathCertificate ? (
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, 'death')}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
-                    isDragging
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${isDragging
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <input
                     type="file"
@@ -302,7 +278,7 @@ function DocumentsContent() {
                 <div className="border-2 border-green-500 bg-green-50 rounded-xl p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <File className="w-8 h-8 text-green-600" />
+                      <FileText className="w-8 h-8 text-green-600" />
                       <div>
                         <div className="font-medium text-gray-900">{deathCertificate.name}</div>
                         <div className="text-sm text-gray-500">
@@ -327,7 +303,7 @@ function DocumentsContent() {
               <label className="block text-sm font-semibold text-gray-900 mb-3">
                 2. ID Proof <span className="text-xs font-normal text-gray-500">(Optional)</span>
               </label>
-              
+
               {!idProof ? (
                 <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-gray-50 transition-all cursor-pointer">
                   <input
@@ -349,7 +325,7 @@ function DocumentsContent() {
                 <div className="border-2 border-blue-500 bg-blue-50 rounded-xl p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <File className="w-8 h-8 text-blue-600" />
+                      <FileText className="w-8 h-8 text-blue-600" />
                       <div>
                         <div className="font-medium text-gray-900">{idProof.name}</div>
                         <div className="text-sm text-gray-500">
@@ -429,7 +405,7 @@ function DocumentsContent() {
                   <span className="text-sm text-gray-600">{uploadProgress}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
+                  <div
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   ></div>
@@ -460,16 +436,15 @@ function DocumentsContent() {
               >
                 Upload Later
               </button>
-              
+
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!isFormValid || submitting}
-                className={`flex-1 py-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2 ${
-                  isFormValid && !submitting
+                className={`flex-1 py-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2 ${isFormValid && !submitting
                     ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
                     : 'bg-gray-300 cursor-not-allowed'
-                }`}
+                  }`}
               >
                 {submitting ? (
                   <>

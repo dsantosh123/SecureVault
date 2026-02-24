@@ -4,11 +4,11 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Shield, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Shield,
+  Clock,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Eye,
   FileText,
@@ -21,6 +21,8 @@ import {
   Check,
   RotateCcw
 } from "lucide-react"
+import { apiGet, apiPut } from "@/lib/api-client"
+import { API_ENDPOINTS, API_BASE_URL } from "@/lib/api-config"
 
 interface VerificationRequest {
   id: string
@@ -72,120 +74,41 @@ export default function VerificationPage() {
 
   const fetchVerificationRequests = async () => {
     setLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      const mockData: VerificationRequest[] = [
-        {
-          id: "VER-8825",
-          nomineeEmail: "john.nominee@example.com",
-          nomineeName: "John Doe",
-          nomineePhone: "+1 234-567-8900",
-          relationship: "Son",
-          userId: "U-12345",
-          userRegistration: "Jan 15, 2023",
-          userLastLogin: "Dec 20, 2024",
-          userInactivityPeriod: "180 days",
-          assetId: "AST-999",
-          assetType: "Digital Will",
-          assetCount: 3,
-          deathCertificateUrl: "/documents/death-cert-001.pdf",
-          legalDeclarationUrl: "/documents/legal-dec-001.pdf",
-          idProofUrl: "/documents/id-proof-001.pdf",
-          status: "pending",
-          priority: "high",
-          submittedAt: "5 hours ago"
-        },
-        {
-          id: "VER-8824",
-          nomineeEmail: "sarah.nominee@example.com",
-          nomineeName: "Sarah Smith",
-          nomineePhone: "+1 234-567-8901",
-          relationship: "Daughter",
-          userId: "U-12346",
-          userRegistration: "Mar 10, 2023",
-          userLastLogin: "Jan 05, 2025",
-          userInactivityPeriod: "180 days",
-          assetId: "AST-998",
-          assetType: "Crypto Wallet",
-          assetCount: 5,
-          deathCertificateUrl: "/documents/death-cert-002.pdf",
-          legalDeclarationUrl: "/documents/legal-dec-002.pdf",
-          idProofUrl: "/documents/id-proof-002.pdf",
-          status: "pending",
-          priority: "high",
-          submittedAt: "8 hours ago"
-        },
-        {
-          id: "VER-8823",
-          nomineeEmail: "mike.nominee@example.com",
-          nomineeName: "Mike Johnson",
-          nomineePhone: "+1 234-567-8902",
-          relationship: "Brother",
-          userId: "U-12347",
-          userRegistration: "Jun 20, 2023",
-          userLastLogin: "Jan 10, 2025",
-          userInactivityPeriod: "90 days",
-          assetId: "AST-997",
-          assetType: "Bank Credentials",
-          assetCount: 2,
-          deathCertificateUrl: "/documents/death-cert-003.pdf",
-          legalDeclarationUrl: "",
-          idProofUrl: "/documents/id-proof-003.pdf",
-          status: "awaiting_docs",
-          priority: "medium",
-          submittedAt: "1 day ago"
-        },
-        {
-          id: "VER-8822",
-          nomineeEmail: "emma.nominee@example.com",
-          nomineeName: "Emma Wilson",
-          nomineePhone: "+1 234-567-8903",
-          relationship: "Wife",
-          userId: "U-12348",
-          userRegistration: "Feb 5, 2023",
-          userLastLogin: "Jan 08, 2025",
-          userInactivityPeriod: "180 days",
-          assetId: "AST-996",
-          assetType: "Digital Will",
-          assetCount: 4,
-          deathCertificateUrl: "/documents/death-cert-004.pdf",
-          legalDeclarationUrl: "/documents/legal-dec-004.pdf",
-          idProofUrl: "/documents/id-proof-004.pdf",
-          status: "approved",
-          priority: "medium",
-          submittedAt: "2 days ago",
-          reviewedAt: "1 day ago",
-          reviewedBy: "admin@securevault-admin.com",
-          adminNotes: "All documents verified. Identity confirmed."
-        },
-        {
-          id: "VER-8821",
-          nomineeEmail: "alex.nominee@example.com",
-          nomineeName: "Alex Brown",
-          nomineePhone: "+1 234-567-8904",
-          relationship: "Son",
-          userId: "U-12349",
-          userRegistration: "Apr 12, 2023",
-          userLastLogin: "Jan 12, 2025",
-          userInactivityPeriod: "180 days",
-          assetId: "AST-995",
-          assetType: "Password Manager",
+    try {
+      const response = await apiGet<any[]>(API_ENDPOINTS.admin.verificationRequests)
+      if (response.success && response.data) {
+        // Map backend VerificationRequestResponseDTO to frontend interface
+        const mappedData: VerificationRequest[] = response.data.map(req => ({
+          id: req.id,
+          nomineeEmail: req.nomineeEmail,
+          nomineeName: req.nomineeName,
+          nomineePhone: req.nomineePhone,
+          relationship: req.relationship,
+          userId: req.deceasedUserId,
+          deceasedUserName: req.deceasedUserName,
+          userRegistration: "N/A", // Not provided in current DTO
+          userLastLogin: "N/A",
+          userInactivityPeriod: "N/A",
+          assetId: "All Assigned Assets", // Metadata
+          assetType: "Legal Claim",
           assetCount: 1,
-          deathCertificateUrl: "/documents/death-cert-005.pdf",
-          legalDeclarationUrl: "/documents/legal-dec-005.pdf",
-          idProofUrl: "/documents/id-proof-005.pdf",
-          status: "rejected",
-          priority: "low",
-          submittedAt: "3 days ago",
-          reviewedAt: "2 days ago",
-          reviewedBy: "admin@securevault-admin.com",
-          rejectionReason: "Death certificate appears to be tampered with",
-          adminNotes: "Requested re-upload of death certificate"
-        }
-      ]
-      setRequests(mockData)
+          deathCertificateUrl: req.deathCertificateFileId ? `${API_BASE_URL}/storage/${req.deathCertificateFileId}` : "",
+          legalDeclarationUrl: "",
+          idProofUrl: "",
+          status: (req.status || "pending").toLowerCase().replace("pending_admin_review", "pending") as any,
+          priority: "medium",
+          submittedAt: new Date(req.submittedAt).toLocaleDateString(),
+          adminNotes: req.adminNotes,
+          rejectionReason: req.rejectionReason,
+          reviewedAt: req.reviewedAt ? new Date(req.reviewedAt).toLocaleDateString() : undefined
+        }))
+        setRequests(mappedData)
+      }
+    } catch (error) {
+      console.error("Failed to fetch verification requests:", error)
+    } finally {
       setLoading(false)
-    }, 1000)
+    }
   }
 
   const filterRequests = () => {
@@ -203,7 +126,7 @@ export default function VerificationPage() {
 
     // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(req => 
+      filtered = filtered.filter(req =>
         req.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         req.nomineeEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
         req.nomineeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -221,35 +144,25 @@ export default function VerificationPage() {
     }
 
     setActionLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      // Update request status
-      setRequests(prev => prev.map(req => 
-        req.id === selectedRequest.id 
-          ? { 
-              ...req, 
-              status: "approved" as const,
-              reviewedAt: new Date().toLocaleString(),
-              reviewedBy: localStorage.getItem("adminEmail") || "admin",
-              adminNotes: adminNotes
-            }
-          : req
-      ))
-      
-      // Log action
-      console.log("AUDIT LOG:", {
-        action: "APPROVE_VERIFICATION",
-        verificationId: selectedRequest.id,
-        adminEmail: localStorage.getItem("adminEmail"),
-        timestamp: new Date().toISOString(),
+    try {
+      const response = await apiPut(API_ENDPOINTS.admin.approveRequest(selectedRequest.id), {
+        status: "APPROVED",
         notes: adminNotes
       })
 
+      if (response.success) {
+        alert("Verification approved successfully!")
+        fetchVerificationRequests()
+        setShowModal(false)
+        setAdminNotes("")
+      } else {
+        alert(response.error || "Failed to approve verification")
+      }
+    } catch (error) {
+      alert("An unexpected error occurred")
+    } finally {
       setActionLoading(false)
-      setShowModal(false)
-      setAdminNotes("")
-      alert("Verification approved successfully!")
-    }, 1500)
+    }
   }
 
   const handleReject = async () => {
@@ -259,35 +172,27 @@ export default function VerificationPage() {
     }
 
     setActionLoading(true)
-    setTimeout(() => {
-      setRequests(prev => prev.map(req => 
-        req.id === selectedRequest.id 
-          ? { 
-              ...req, 
-              status: "rejected" as const,
-              reviewedAt: new Date().toLocaleString(),
-              reviewedBy: localStorage.getItem("adminEmail") || "admin",
-              rejectionReason: rejectionReason,
-              adminNotes: adminNotes
-            }
-          : req
-      ))
-      
-      console.log("AUDIT LOG:", {
-        action: "REJECT_VERIFICATION",
-        verificationId: selectedRequest.id,
-        adminEmail: localStorage.getItem("adminEmail"),
-        timestamp: new Date().toISOString(),
-        reason: rejectionReason,
-        notes: adminNotes
+    try {
+      const response = await apiPut(API_ENDPOINTS.admin.rejectRequest(selectedRequest.id), {
+        status: "REJECTED",
+        notes: adminNotes,
+        rejectionReason: rejectionReason
       })
 
+      if (response.success) {
+        alert("Verification rejected successfully!")
+        fetchVerificationRequests()
+        setShowModal(false)
+        setRejectionReason("")
+        setAdminNotes("")
+      } else {
+        alert(response.error || "Failed to reject verification")
+      }
+    } catch (error) {
+      alert("An unexpected error occurred")
+    } finally {
       setActionLoading(false)
-      setShowModal(false)
-      setRejectionReason("")
-      setAdminNotes("")
-      alert("Verification rejected and nominee notified")
-    }, 1500)
+    }
   }
 
   const handleRequestDocs = async () => {
@@ -298,16 +203,16 @@ export default function VerificationPage() {
 
     setActionLoading(true)
     setTimeout(() => {
-      setRequests(prev => prev.map(req => 
-        req.id === selectedRequest.id 
-          ? { 
-              ...req, 
-              status: "awaiting_docs" as const,
-              adminNotes: adminNotes
-            }
+      setRequests(prev => prev.map(req =>
+        req.id === selectedRequest.id
+          ? {
+            ...req,
+            status: "awaiting_docs" as const,
+            adminNotes: adminNotes
+          }
           : req
       ))
-      
+
       console.log("AUDIT LOG:", {
         action: "REQUEST_DOCUMENTS",
         verificationId: selectedRequest.id,
@@ -324,10 +229,12 @@ export default function VerificationPage() {
   }
 
   const viewDocument = (url: string) => {
-    setCurrentDocument(url)
-    setShowDocumentViewer(true)
-    
-    // Log document view
+    if (!url) return;
+
+    // In production, construction of the URL ensures it points to /api/storage/{fileId}
+    window.open(url, '_blank');
+
+    // Log document view for audit
     console.log("AUDIT LOG:", {
       action: "VIEW_DOCUMENT",
       verificationId: selectedRequest?.id,

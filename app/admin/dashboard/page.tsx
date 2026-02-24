@@ -4,11 +4,11 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Users, 
-  Shield, 
-  FileText, 
-  Activity, 
+import {
+  Users,
+  Shield,
+  FileText,
+  Activity,
   TrendingUp,
   Clock,
   CheckCircle,
@@ -20,6 +20,8 @@ import {
   Download
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { apiGet } from "@/lib/api-client"
+import { API_ENDPOINTS } from "@/lib/api-config"
 
 interface SystemStats {
   totalUsers: number
@@ -73,76 +75,57 @@ export default function AdminDashboard() {
       setAdmin({ email: adminEmail })
     }
 
-    const timer = setTimeout(() => {
-      setStats({
-        totalUsers: 1247,
-        activeUsers: 892,
-        inactiveUsers: 355,
-        totalAssets: 3891,
-        pendingVerifications: 12,
-        approvedVerifications: 34,
-        rejectedVerifications: 8,
-        systemUptime: "99.9%"
-      })
-
-      setRecentActivity([
-        {
-          id: "1",
-          action: "Approved verification for VER-8821",
-          admin: "admin@securevault-admin.com",
-          timestamp: "2 minutes ago",
-          status: "success"
-        },
-        {
-          id: "2",
-          action: "Rejected verification VER-8820 - Invalid document",
-          admin: "admin@securevault-admin.com",
-          timestamp: "15 minutes ago",
-          status: "error"
-        },
-        {
-          id: "3",
-          action: "Requested document re-upload for VER-8819",
-          admin: "admin@securevault-admin.com",
-          timestamp: "1 hour ago",
-          status: "warning"
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch real stats
+        const statsRes = await apiGet<any>(API_ENDPOINTS.admin.stats);
+        if (statsRes.success && statsRes.data) {
+          setStats({
+            totalUsers: statsRes.data.totalUsers || 0,
+            activeUsers: statsRes.data.activeUsers || 0,
+            inactiveUsers: (statsRes.data.totalUsers || 0) - (statsRes.data.activeUsers || 0),
+            totalAssets: statsRes.data.totalAssets || 0,
+            pendingVerifications: statsRes.data.pendingVerifications || 0,
+            approvedVerifications: statsRes.data.approvedVerifications || 0,
+            rejectedVerifications: statsRes.data.rejectedVerifications || 0,
+            systemUptime: statsRes.data.systemUptime || "99.9%"
+          });
         }
-      ])
 
-      setUrgentRequests([
-        {
-          id: "VER-8825",
-          nomineeEmail: "nominee1@example.com",
-          userId: "U-12345",
-          assetType: "Digital Will",
-          status: "pending",
-          submittedAt: "5 hours ago",
-          priority: "high"
-        },
-        {
-          id: "VER-8824",
-          nomineeEmail: "nominee2@example.com",
-          userId: "U-12346",
-          assetType: "Crypto Assets",
-          status: "pending",
-          submittedAt: "8 hours ago",
-          priority: "high"
-        },
-        {
-          id: "VER-8823",
-          nomineeEmail: "nominee3@example.com",
-          userId: "U-12347",
-          assetType: "Bank Credentials",
-          status: "awaiting_docs",
-          submittedAt: "1 day ago",
-          priority: "medium"
+        // Fetch real verification requests for "Urgent" list
+        const verRes = await apiGet<any[]>(API_ENDPOINTS.admin.verificationRequests);
+        if (verRes.success && verRes.data) {
+          setUrgentRequests(verRes.data.slice(0, 5).map(req => ({
+            id: req.id,
+            nomineeEmail: `${req.nomineeName} (${req.nomineeEmail})`,
+            userId: req.deceasedUserName,
+            assetType: "Claim for: " + req.relationship,
+            status: (req.status || "pending").toLowerCase().replace("pending_admin_review", "pending") as any,
+            submittedAt: new Date(req.submittedAt).toLocaleDateString(),
+            priority: "high"
+          })));
         }
-      ])
 
-      setLoading(false)
-    }, 800)
+        // Fetch real activity logs
+        const logsRes = await apiGet<any[]>(API_ENDPOINTS.admin.logs);
+        if (logsRes.success && logsRes.data) {
+          setRecentActivity(logsRes.data.slice(0, 5).map(log => ({
+            id: log.id,
+            action: log.details,
+            admin: log.userName,
+            timestamp: new Date(log.timestamp).toLocaleTimeString(),
+            status: log.action.includes('SUCCESS') || log.action.includes('UPLOAD') || log.action.includes('LOGIN') ? 'success' : 'warning'
+          })));
+        }
+      } catch (error) {
+        console.error("Dashboard fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => clearTimeout(timer)
+    fetchData();
   }, [])
 
   const overviewCards = [
@@ -338,8 +321,8 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-bold text-foreground">Urgent Verifications</h2>
                   <p className="text-sm text-muted-foreground mt-1">Requires immediate attention</p>
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white"
                   onClick={() => router.push("/admin/verification")}
                 >
@@ -371,8 +354,8 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                     </div>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       variant="outline"
                       className="border-border hover:bg-primary/10 hover:text-primary group-hover:border-primary/50"
                     >
@@ -395,8 +378,8 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-bold text-foreground">Recent Activity</h2>
                   <p className="text-sm text-muted-foreground mt-1">Last 24 hours</p>
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="ghost"
                   className="hover:bg-muted"
                   onClick={() => router.push("/admin/logs")}
@@ -448,7 +431,7 @@ export default function AdminDashboard() {
                   <Shield className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
-              <Button 
+              <Button
                 className="mt-4 w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-md group/btn"
                 onClick={() => router.push("/admin/verification")}
               >
@@ -472,8 +455,8 @@ export default function AdminDashboard() {
                   <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="mt-4 w-full border-border hover:bg-muted hover:border-primary/50 transition-all group/btn"
                 onClick={() => router.push("/admin/users")}
               >

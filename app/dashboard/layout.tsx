@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { LogOut, Home, Plus, Eye, Settings, Menu, X, CreditCard, ArrowLeft } from "lucide-react"
+import { LogOut, Home, Plus, Eye, Settings, Menu, X, CreditCard, ArrowLeft, Users } from "lucide-react"
 
 export default function DashboardLayout({
   children,
@@ -52,6 +52,7 @@ export default function DashboardLayout({
     { href: "/dashboard", label: "Overview", icon: Home },
     { href: "/dashboard/add-asset", label: "Add Digital Asset", icon: Plus },
     { href: "/dashboard/assets", label: "View Assets", icon: Eye },
+    { href: "/dashboard/nominees", label: "Manage Nominees", icon: Users },
     { href: "/dashboard/security", label: "Security Settings", icon: Settings },
   ]
 
@@ -80,9 +81,8 @@ export default function DashboardLayout({
       <div className="flex">
         {/* Sidebar */}
         <div
-          className={`${
-            isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } fixed md:relative md:translate-x-0 left-0 top-0 md:top-auto h-screen md:h-auto w-64 bg-card border-r border-border transition-transform duration-300 z-30 md:z-auto overflow-y-auto flex flex-col`}
+          className={`${isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+            } fixed md:relative md:translate-x-0 left-0 top-0 md:top-auto h-screen md:h-auto w-64 bg-card border-r border-border transition-transform duration-300 z-30 md:z-auto overflow-y-auto flex flex-col`}
         >
           {/* Logo */}
           <div className="hidden md:flex items-center gap-3 p-6 border-b border-border">
@@ -125,11 +125,10 @@ export default function DashboardLayout({
                   onClick={() => {
                     if (isMobile) setIsSidebarOpen(false)
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    isActive(href) 
-                      ? "bg-primary text-primary-foreground shadow-md" 
-                      : "text-foreground hover:bg-muted hover:translate-x-1"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive(href)
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "text-foreground hover:bg-muted hover:translate-x-1"
+                    }`}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
                   <span className="font-medium">{label}</span>
@@ -143,10 +142,10 @@ export default function DashboardLayout({
             <div className="mx-4 md:mx-6 mb-4 p-3 rounded-lg bg-muted/50 border border-border">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-primary-foreground font-semibold">
-                  {user.name?.charAt(0).toUpperCase() || "U"}
+                  {user.fullName?.charAt(0).toUpperCase() || "U"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{user.name || "User"}</p>
+                  <p className="text-sm font-semibold text-foreground truncate">{user.fullName || "User"}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email || ""}</p>
                 </div>
               </div>

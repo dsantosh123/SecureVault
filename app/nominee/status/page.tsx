@@ -2,11 +2,13 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { 
-  Shield, CheckCircle, Clock, AlertCircle, Loader2, 
+import {
+  Shield, CheckCircle, Clock, AlertCircle, Loader2,
   Upload, FileCheck, UserCheck, Gift, Mail, Phone,
   XCircle, RefreshCw, ArrowRight
 } from 'lucide-react';
+import { API_ENDPOINTS } from "@/lib/api-config";
+import { apiGet } from "@/lib/api-client";
 
 // TypeScript interfaces
 interface TimelineStep {
@@ -18,8 +20,8 @@ interface TimelineStep {
 }
 
 interface StatusData {
-  status: 'IDENTITY_CONFIRMED' | 'AWAITING_DOCUMENTS' | 'DOCUMENTS_SUBMITTED' | 
-          'PENDING_ADMIN_REVIEW' | 'DOCUMENTS_REQUESTED' | 'APPROVED' | 'REJECTED';
+  status: 'IDENTITY_CONFIRMED' | 'AWAITING_DOCUMENTS' | 'DOCUMENTS_SUBMITTED' |
+  'PENDING_ADMIN_REVIEW' | 'DOCUMENTS_REQUESTED' | 'APPROVED' | 'REJECTED';
   timeline: TimelineStep[];
   verificationId: string;
   submittedAt?: string;
@@ -38,7 +40,7 @@ interface StatusData {
 function StatusContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [loading, setLoading] = useState(true);
   const [statusData, setStatusData] = useState<StatusData | null>(null);
   const [error, setError] = useState('');
@@ -46,7 +48,7 @@ function StatusContent() {
 
   useEffect(() => {
     const token = searchParams.get('token');
-    
+
     if (!token) {
       router.push('/nominee/verify');
       return;
@@ -70,17 +72,16 @@ function StatusContent() {
         setRefreshing(true);
       }
 
-      const response = await fetch(`/api/nominee/status/get?token=${token}`);
-      const data = await response.json();
+      const response = await apiGet<StatusData>(API_ENDPOINTS.verification.getStatus(token));
 
-      if (!response.ok) {
-        setError(data.error || 'Failed to fetch status');
+      if (!response.success) {
+        setError(response.error || 'Failed to fetch status');
         setLoading(false);
         setRefreshing(false);
         return;
       }
 
-      setStatusData(data);
+      setStatusData(response.data || null);
       setError('');
       setLoading(false);
       setRefreshing(false);
@@ -233,7 +234,7 @@ function StatusContent() {
         {/* Timeline */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Progress Timeline</h2>
-          
+
           <div className="space-y-6">
             {statusData.timeline.map((step, index) => (
               <div key={index} className="relative">
@@ -279,7 +280,7 @@ function StatusContent() {
         </div>
 
         {/* Status-specific Cards */}
-        
+
         {/* Awaiting Documents */}
         {statusData.status === 'AWAITING_DOCUMENTS' && (
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">

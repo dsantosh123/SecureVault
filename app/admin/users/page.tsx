@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Filter, Eye, Calendar, Activity, Clock, Shield, AlertCircle, CheckCircle, XCircle, TrendingUp, Users, FileText, X, ChevronDown } from 'lucide-react';
+import { apiGet } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/lib/api-config';
 
 // Types
 interface UserRecord {
@@ -30,45 +32,7 @@ interface VerificationRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'NOT_STARTED';
 }
 
-// Mock Data Generator
-const generateMockUsers = (): UserRecord[] => {
-  const statuses: UserRecord['status'][] = ['ACTIVE', 'INACTIVE_TRIGGERED', 'RELEASE_IN_PROGRESS', 'CLOSED'];
-  const inactivityPeriods = [30, 90, 180, 365];
-  const actions = [
-    { action: 'LOGIN', details: 'User logged in', icon: '🔐' },
-    { action: 'ASSET_ADDED', details: 'Added new cryptocurrency wallet', icon: '💰' },
-    { action: 'INACTIVITY_UPDATED', details: 'Updated inactivity period to 180 days', icon: '⏰' },
-    { action: 'NOMINEE_ADDED', details: 'Added new nominee', icon: '👤' },
-    { action: 'DOCUMENT_UPLOADED', details: 'Uploaded will document', icon: '📄' }
-  ];
-  
-  return Array.from({ length: 25 }, (_, i) => ({
-    id: `user-${i + 1}`,
-    userId: `U-${String(100000 + i).slice(-6)}`,
-    registrationDate: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
-    lastLogin: new Date(Date.now() - Math.random() * 180 * 24 * 60 * 60 * 1000).toISOString(),
-    inactivityPeriod: inactivityPeriods[Math.floor(Math.random() * inactivityPeriods.length)],
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    assetsCount: Math.floor(Math.random() * 15) + 1,
-    nomineesCount: Math.floor(Math.random() * 5) + 1,
-    activityTimeline: Array.from({ length: 5 }, (_, j) => {
-      const randomAction = actions[Math.floor(Math.random() * actions.length)];
-      return {
-        id: `${i}-${j}`,
-        date: new Date(Date.now() - (j + 1) * 10 * 24 * 60 * 60 * 1000).toISOString(),
-        action: randomAction.action,
-        details: randomAction.details,
-        icon: randomAction.icon
-      };
-    }),
-    verificationRequests: [
-      { nomineeId: 'NOM-001', status: Math.random() > 0.5 ? 'APPROVED' : 'PENDING' },
-      { nomineeId: 'NOM-002', status: Math.random() > 0.5 ? 'PENDING' : 'REJECTED' },
-      { nomineeId: 'NOM-003', status: 'NOT_STARTED' }
-    ]
-  }));
-};
-
+// Real data loading implementation
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserRecord[]>([]);
@@ -84,11 +48,37 @@ export default function AdminUsersPage() {
   useEffect(() => {
     const loadUsers = async () => {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      const mockUsers = generateMockUsers();
-      setUsers(mockUsers);
-      setFilteredUsers(mockUsers);
-      setLoading(false);
+      try {
+        const response = await apiGet<any[]>(API_ENDPOINTS.admin.users);
+        if (response.success && response.data) {
+          const mappedUsers: UserRecord[] = response.data.map(u => ({
+            id: u.id,
+            userId: u.email, // using email as a better display identifier
+            registrationDate: u.lastLoginAt || new Date().toISOString(), // Fallback
+            lastLogin: u.lastLoginAt || new Date().toISOString(),
+            inactivityPeriod: u.inactivityDays || 30,
+            status: u.lastLoginAt ? 'ACTIVE' : 'INACTIVE_TRIGGERED', // Simple logic
+            assetsCount: u.assetCount || 0,
+            nomineesCount: u.nomineeCount || 0,
+            activityTimeline: [
+              {
+                id: 'last',
+                date: u.lastLoginAt || new Date().toISOString(),
+                action: 'LOGGED_IN',
+                details: 'Last recorded system activity',
+                icon: '🔐'
+              }
+            ],
+            verificationRequests: []
+          }));
+          setUsers(mappedUsers);
+          setFilteredUsers(mappedUsers);
+        }
+      } catch (error) {
+        console.error("Failed to load users:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     loadUsers();
   }, []);
@@ -117,35 +107,35 @@ export default function AdminUsersPage() {
   // Get status config
   const getStatusConfig = (status: UserRecord['status']) => {
     const configs = {
-      ACTIVE: { 
-        bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', 
-        text: 'text-emerald-700 dark:text-emerald-300', 
+      ACTIVE: {
+        bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+        text: 'text-emerald-700 dark:text-emerald-300',
         border: 'border-emerald-500/30',
-        icon: CheckCircle, 
+        icon: CheckCircle,
         label: 'Active',
         dot: 'bg-emerald-500'
       },
-      INACTIVE_TRIGGERED: { 
-        bg: 'bg-amber-500/10 dark:bg-amber-500/20', 
-        text: 'text-amber-700 dark:text-amber-300', 
+      INACTIVE_TRIGGERED: {
+        bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+        text: 'text-amber-700 dark:text-amber-300',
         border: 'border-amber-500/30',
-        icon: Clock, 
+        icon: Clock,
         label: 'Inactive Triggered',
         dot: 'bg-amber-500'
       },
-      RELEASE_IN_PROGRESS: { 
-        bg: 'bg-rose-500/10 dark:bg-rose-500/20', 
-        text: 'text-rose-700 dark:text-rose-300', 
+      RELEASE_IN_PROGRESS: {
+        bg: 'bg-rose-500/10 dark:bg-rose-500/20',
+        text: 'text-rose-700 dark:text-rose-300',
         border: 'border-rose-500/30',
-        icon: AlertCircle, 
+        icon: AlertCircle,
         label: 'Release In Progress',
         dot: 'bg-rose-500'
       },
-      CLOSED: { 
-        bg: 'bg-slate-500/10 dark:bg-slate-500/20', 
-        text: 'text-slate-700 dark:text-slate-300', 
+      CLOSED: {
+        bg: 'bg-slate-500/10 dark:bg-slate-500/20',
+        text: 'text-slate-700 dark:text-slate-300',
         border: 'border-slate-500/30',
-        icon: XCircle, 
+        icon: XCircle,
         label: 'Closed',
         dot: 'bg-slate-500'
       }
@@ -181,7 +171,7 @@ export default function AdminUsersPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Header with animated gradient */}
         <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl shadow-2xl p-8">
           <div className="absolute inset-0 bg-black/10"></div>
@@ -390,14 +380,14 @@ export default function AdminUsersPage() {
                     const config = getStatusConfig(user.status);
                     const Icon = config.icon;
                     return (
-                      <tr 
-                        key={user.id} 
+                      <tr
+                        key={user.id}
                         className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all duration-200 group"
                       >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                              {user.userId.split('-')[1].slice(0, 2)}
+                              {user.userId.split('@')[0].slice(0, 2).toUpperCase()}
                             </div>
                             <span className="font-mono text-sm font-bold text-slate-900 dark:text-slate-100">{user.userId}</span>
                           </div>
@@ -482,7 +472,7 @@ export default function AdminUsersPage() {
             <div className="flex-1">
               <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">🔐 Zero-Knowledge Security Enforced</h3>
               <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                <strong>Admin Cannot Access:</strong> Asset content, Decrypted data, User credentials, Encryption keys, Video messages. 
+                <strong>Admin Cannot Access:</strong> Asset content, Decrypted data, User credentials, Encryption keys, Video messages.
                 <strong className="ml-2">Admin Can View:</strong> User IDs, Activity metadata, Asset counts, Login timestamps. All actions are logged for compliance.
               </p>
             </div>
@@ -494,7 +484,7 @@ export default function AdminUsersPage() {
       {showUserModal && selectedUser && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-200 dark:border-slate-700">
-            
+
             {/* Modal Header */}
             <div className="sticky top-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-8 py-6 flex items-center justify-between border-b border-white/20 z-10">
               <div className="flex items-center gap-4">
@@ -516,7 +506,7 @@ export default function AdminUsersPage() {
 
             {/* Modal Content */}
             <div className="p-8 space-y-8 overflow-y-auto max-h-[calc(90vh-200px)]">
-              
+
               {/* Status Badge */}
               <div className="flex items-center justify-center">
                 {(() => {
@@ -644,12 +634,11 @@ export default function AdminUsersPage() {
                         </div>
                         <span className="text-sm font-mono font-semibold text-slate-900 dark:text-slate-100">{request.nomineeId}</span>
                       </div>
-                      <span className={`px-4 py-2 rounded-lg text-xs font-bold border-2 ${
-                        request.status === 'APPROVED' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' :
+                      <span className={`px-4 py-2 rounded-lg text-xs font-bold border-2 ${request.status === 'APPROVED' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' :
                         request.status === 'PENDING' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700' :
-                        request.status === 'REJECTED' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700' :
-                        'bg-slate-50 dark:bg-slate-900/20 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                      }`}>
+                          request.status === 'REJECTED' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700' :
+                            'bg-slate-50 dark:bg-slate-900/20 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}>
                         {request.status === 'APPROVED' && '✅ '}
                         {request.status === 'PENDING' && '⏳ '}
                         {request.status === 'REJECTED' && '❌ '}

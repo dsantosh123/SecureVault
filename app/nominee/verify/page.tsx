@@ -3,6 +3,8 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, Lock, CheckCircle, XCircle, Loader2, Clock, AlertTriangle } from 'lucide-react';
+import { API_ENDPOINTS } from "@/lib/api-config";
+import { apiGet } from "@/lib/api-client";
 
 // Define TypeScript interfaces
 interface TokenData {
@@ -26,7 +28,7 @@ function VerifyContent() {
 
   useEffect(() => {
     const token = searchParams.get('token');
-    
+
     if (!token) {
       setStatus('invalid');
       setErrorMessage('No verification token provided');
@@ -62,26 +64,19 @@ function VerifyContent() {
     try {
       setStatus('validating');
 
-      const response = await fetch(`/api/nominee/verify-token?token=${token}`);
-      const data = await response.json();
+      const response = await apiGet<TokenData>(API_ENDPOINTS.verification.verifyToken(token));
 
-      if (!response.ok) {
-        if (response.status === 410) {
-          setStatus('expired');
-        } else if (response.status === 404 || response.status === 400) {
-          setStatus('invalid');
-          setErrorMessage(data.error || 'Invalid verification link');
-        } else {
-          setStatus('error');
-          setErrorMessage(data.error || 'An error occurred');
-        }
+      if (!response.success) {
+        setStatus('invalid');
+        setErrorMessage(response.error || 'Invalid verification link');
         return;
       }
 
-      if (data.valid) {
+      const data = response.data;
+      if (data && data.valid) {
         setStatus('valid');
         setTokenData(data);
-        
+
         // Auto-redirect to identity confirmation after 2 seconds
         setTimeout(() => {
           router.push(`/nominee/identity?token=${token}`);
@@ -352,7 +347,7 @@ function VerifyContent() {
           >
             Try Again
           </button>
-          
+
           <button
             onClick={() => window.location.href = 'mailto:support@securevault.com'}
             className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-colors"

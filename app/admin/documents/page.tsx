@@ -3,6 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Eye, CheckCircle, XCircle, AlertTriangle, Download, Shield, Clock, Search, Filter } from 'lucide-react';
 
+import { apiGet, apiPost } from '@/lib/api-client';
+import { API_ENDPOINTS } from '@/lib/api-config';
+
 // Types
 interface Document {
   id: string;
@@ -49,80 +52,52 @@ const AdminDocumentsPage = () => {
   });
   const [validationNotes, setValidationNotes] = useState('');
   const [showDownloadWarning, setShowDownloadWarning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data - replace with API call
+  // Fetch real data from API
   useEffect(() => {
-    const mockDocuments: Document[] = [
-      {
-        id: 'DOC-001',
-        nomineeEmail: 'john.doe@example.com',
-        nomineeName: 'John Doe',
-        userId: 'U-123456',
-        type: 'DEATH_CERTIFICATE',
-        uploadDate: '2024-01-15T14:30:00Z',
-        status: 'PENDING',
-        fileUrl: 'https://example.com/cert1.pdf',
-        fileName: 'death_certificate.pdf',
-        fileSize: 2457600,
-        verificationId: 'VER-789'
-      },
-      {
-        id: 'DOC-002',
-        nomineeEmail: 'sarah.smith@example.com',
-        nomineeName: 'Sarah Smith',
-        userId: 'U-234567',
-        type: 'LEGAL_DECLARATION',
-        uploadDate: '2024-01-14T10:15:00Z',
-        status: 'UNDER_REVIEW',
-        fileUrl: 'https://example.com/legal1.pdf',
-        fileName: 'legal_declaration.pdf',
-        fileSize: 1024000,
-        verificationId: 'VER-790'
-      },
-      {
-        id: 'DOC-003',
-        nomineeEmail: 'mike.johnson@example.com',
-        nomineeName: 'Mike Johnson',
-        userId: 'U-345678',
-        type: 'DEATH_CERTIFICATE',
-        uploadDate: '2024-01-13T16:45:00Z',
-        status: 'VALIDATED',
-        fileUrl: 'https://example.com/cert2.pdf',
-        fileName: 'death_cert_validated.pdf',
-        fileSize: 3145728,
-        verificationId: 'VER-791',
-        reviewedBy: 'ADMIN-001',
-        reviewedAt: '2024-01-14T09:00:00Z',
-        validationNotes: 'All checks passed. Certificate verified.'
-      },
-      {
-        id: 'DOC-004',
-        nomineeEmail: 'emma.wilson@example.com',
-        nomineeName: 'Emma Wilson',
-        userId: 'U-456789',
-        type: 'ID_PROOF',
-        uploadDate: '2024-01-12T11:20:00Z',
-        status: 'REJECTED',
-        fileUrl: 'https://example.com/id1.jpg',
-        fileName: 'id_proof.jpg',
-        fileSize: 512000,
-        verificationId: 'VER-792',
-        reviewedBy: 'ADMIN-002',
-        reviewedAt: '2024-01-13T14:30:00Z',
-        validationNotes: 'Document appears tampered. Requested re-upload.'
+    const fetchDocuments = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await apiGet(API_ENDPOINTS.admin.verificationRequests);
+        if (response.success && Array.isArray(response.data)) {
+          const mappedDocs: Document[] = response.data.map((req: any) => ({
+            id: req.id,
+            nomineeEmail: req.nomineeEmail || 'N/A',
+            nomineeName: req.nomineeName || 'N/A',
+            userId: req.deceasedUserName || req.deceasedUserId || 'N/A',
+            type: 'DEATH_CERTIFICATE', // Currently only death certificates are uploaded for verification
+            uploadDate: req.submittedAt || new Date().toISOString(),
+            status: req.status === 'PENDING_ADMIN_REVIEW' ? 'PENDING' :
+              req.status === 'APPROVED' ? 'VALIDATED' :
+                req.status === 'REJECTED' ? 'REJECTED' : 'UNDER_REVIEW',
+            fileUrl: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'}/storage/files/${req.deathCertificateFileId}`,
+            fileName: 'death_certificate.pdf',
+            fileSize: 0, // Backend doesn't return file size in this DTO yet
+            verificationId: req.id,
+            reviewedBy: req.reviewedBy,
+            reviewedAt: req.reviewedAt,
+            validationNotes: req.adminNotes || req.rejectionReason
+          }));
+          setDocuments(mappedDocs);
+        } else {
+          setError(response.error || 'Failed to fetch documents');
+        }
+      } catch (err) {
+        setError('An unexpected error occurred while fetching documents');
+      } finally {
+        setLoading(false);
       }
-    ];
-    
-    setTimeout(() => {
-      setDocuments(mockDocuments);
-      setLoading(false);
-    }, 1000);
+    };
+
+    fetchDocuments();
   }, []);
 
   // Session timeout for viewer
   useEffect(() => {
     if (!showViewer) return;
-    
+
     const timer = setInterval(() => {
       setSessionTimeout(prev => {
         if (prev <= 1) {
@@ -150,7 +125,7 @@ const AdminDocumentsPage = () => {
       requiredFields: false
     });
     setValidationNotes('');
-    
+
     // Log view action
     logAuditAction('VIEW_DOCUMENT', doc.id);
   };
@@ -218,9 +193,9 @@ const AdminDocumentsPage = () => {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -245,8 +220,8 @@ const AdminDocumentsPage = () => {
 
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.nomineeEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          doc.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          doc.id.toLowerCase().includes(searchTerm.toLowerCase());
+      doc.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || doc.status === statusFilter;
     const matchesType = typeFilter === 'ALL' || doc.type === typeFilter;
     return matchesSearch && matchesStatus && matchesType;

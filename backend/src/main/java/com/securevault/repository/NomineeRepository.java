@@ -1,15 +1,12 @@
 package com.securevault.repository;
 
 import com.securevault.model.Nominee;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;
-import java.util.UUID;
 
 @Repository
-public interface 
-NomineeRepository extends JpaRepository<Nominee, UUID> {
+public interface NomineeRepository extends MongoRepository<Nominee, String> {
     
-    // This helper method finds all nominees added by a specific user ID
-    List<Nominee> findByUserId(UUID userId);
+    List<Nominee> findByUserId(String userId);
 }

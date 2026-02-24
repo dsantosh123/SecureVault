@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Lock, Shield, Eye, EyeOff, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
+import { API_ENDPOINTS } from "@/lib/api-config"
+import { apiPost } from "@/lib/api-client"
 
 export default function SecuritySettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -84,20 +86,20 @@ export default function SecuritySettingsPage() {
         return
       }
 
-      // TODO: Connect to Spring Boot backend
-      // const response = await fetch('/api/security/change-password', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ currentPassword, newPassword })
-      // })
+      const response = await apiPost(API_ENDPOINTS.auth.changePassword, {
+        currentPassword,
+        newPassword
+      });
 
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      if (!response.success) {
+        throw new Error(response.error || "Failed to change password");
+      }
 
       setMessage("success|Password changed successfully! Your account is now more secure.")
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
-      
+
       // Auto-clear success message after 5 seconds
       setTimeout(() => setMessage(""), 5000)
     } catch (err) {
@@ -163,18 +165,16 @@ export default function SecuritySettingsPage() {
 
         {message && (
           <Alert
-            className={`mb-6 animate-in fade-in slide-in-from-top-2 duration-300 ${
-              isSuccess 
-                ? "bg-green-500/10 border-green-500/50" 
-                : "bg-red-500/10 border-red-500/50"
-            }`}
+            className={`mb-6 animate-in fade-in slide-in-from-top-2 duration-300 ${isSuccess
+              ? "bg-green-500/10 border-green-500/50"
+              : "bg-red-500/10 border-red-500/50"
+              }`}
           >
             <AlertDescription
-              className={`flex items-center gap-2 ${
-                isSuccess 
-                  ? "text-green-600 dark:text-green-400" 
-                  : "text-red-600 dark:text-red-400"
-              }`}
+              className={`flex items-center gap-2 ${isSuccess
+                ? "text-green-600 dark:text-green-400"
+                : "text-red-600 dark:text-red-400"
+                }`}
             >
               {isSuccess ? (
                 <CheckCircle2 className="w-4 h-4" />
@@ -227,17 +227,16 @@ export default function SecuritySettingsPage() {
               className="bg-input border-border text-foreground placeholder-muted-foreground focus:ring-ring"
               disabled={isLoading}
             />
-            
+
             {/* Password Strength Indicator */}
             {newPassword && (
               <div className="space-y-2 mt-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Password Strength:</span>
-                  <span className={`font-semibold ${
-                    passwordStrength <= 2 ? 'text-red-500' :
+                  <span className={`font-semibold ${passwordStrength <= 2 ? 'text-red-500' :
                     passwordStrength === 3 ? 'text-yellow-500' :
-                    passwordStrength === 4 ? 'text-blue-500' : 'text-green-500'
-                  }`}>
+                      passwordStrength === 4 ? 'text-blue-500' : 'text-green-500'
+                    }`}>
                     {getStrengthText()}
                   </span>
                 </div>
@@ -247,7 +246,7 @@ export default function SecuritySettingsPage() {
                     style={{ width: `${(passwordStrength / 5) * 100}%` }}
                   />
                 </div>
-                
+
                 {/* Password Criteria Checklist */}
                 <div className="grid grid-cols-1 gap-1 text-xs mt-3">
                   <div className={`flex items-center gap-2 ${passwordCriteria.length ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>

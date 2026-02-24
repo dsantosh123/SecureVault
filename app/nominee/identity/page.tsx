@@ -3,6 +3,8 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, User, Heart, CheckCircle, AlertCircle, Loader2, ArrowRight, FileText } from 'lucide-react';
+import { API_ENDPOINTS } from "@/lib/api-config";
+import { apiGet, apiPost } from "@/lib/api-client";
 
 // TypeScript interfaces
 interface TokenData {
@@ -18,19 +20,19 @@ type RelationshipType = 'Father' | 'Mother' | 'Spouse' | 'Son' | 'Daughter' | 'S
 function IdentityContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [tokenData, setTokenData] = useState<TokenData | null>(null);
   const [error, setError] = useState('');
-  
+
   // Form fields
   const [fullName, setFullName] = useState('');
   const [relationship, setRelationship] = useState<RelationshipType | ''>('');
   const [otherRelationship, setOtherRelationship] = useState('');
   const [checkbox1, setCheckbox1] = useState(false);
   const [checkbox2, setCheckbox2] = useState(false);
-  
+
   // Validation states
   const [nameMatch, setNameMatch] = useState<boolean | null>(null);
   const [nameError, setNameError] = useState('');
@@ -38,7 +40,7 @@ function IdentityContent() {
 
   useEffect(() => {
     const token = searchParams.get('token');
-    
+
     if (!token) {
       router.push('/nominee/verify');
       return;
@@ -50,15 +52,14 @@ function IdentityContent() {
   const verifyToken = async (token: string) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/nominee/verify-token?token=${token}`);
-      const data = await response.json();
+      const response = await apiGet<TokenData>(API_ENDPOINTS.verification.verifyToken(token));
 
-      if (!response.ok || !data.valid) {
+      if (!response.success || !response.data?.valid) {
         router.push('/nominee/invalid');
         return;
       }
 
-      setTokenData(data);
+      setTokenData(response.data);
       setLoading(false);
     } catch (err) {
       console.error('Token verification error:', err);
@@ -74,21 +75,12 @@ function IdentityContent() {
     setNameError('');
 
     try {
-      const token = searchParams.get('token');
-      const response = await fetch('/api/nominee/identity/validate-name', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, enteredName: name })
-      });
-
-      const data = await response.json();
-
-      if (data.match) {
+      if (name.toLowerCase() === tokenData.nomineeNameExpected.toLowerCase()) {
         setNameMatch(true);
         setNameError('');
       } else {
         setNameMatch(false);
-        setNameError(`Name does not match our records. Expected: "${data.expectedName}"`);
+        setNameError(`Name does not match our records.`);
       }
     } catch (err) {
       console.error('Name validation error:', err);
@@ -139,21 +131,15 @@ function IdentityContent() {
 
     try {
       const token = searchParams.get('token');
-      const response = await fetch('/api/nominee/identity/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          fullName: fullName.trim(),
-          relationship: relationship === 'Other' ? otherRelationship.trim() : relationship,
-          legalAcknowledged: true
-        })
+      const response = await apiPost<any>(API_ENDPOINTS.verification.confirmIdentity, {
+        nomineeId: tokenData?.nomineeId,
+        fullName: fullName.trim(),
+        relationship: relationship === 'Other' ? otherRelationship.trim() : relationship,
+        legalAcknowledged: true
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to confirm identity');
+      if (!response.success) {
+        setError(response.error || 'Failed to confirm identity');
         setSubmitting(false);
         return;
       }
@@ -167,8 +153,8 @@ function IdentityContent() {
     }
   };
 
-  const isFormValid = nameMatch && relationship && checkbox1 && checkbox2 && 
-                      (relationship !== 'Other' || otherRelationship.trim());
+  const isFormValid = nameMatch && relationship && checkbox1 && checkbox2 &&
+    (relationship !== 'Other' || otherRelationship.trim());
 
   if (loading) {
     return (
@@ -242,13 +228,12 @@ function IdentityContent() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Enter your name as you were added"
-                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
-                    nameMatch === true
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${nameMatch === true
                       ? 'border-green-500 bg-green-50'
                       : nameMatch === false
-                      ? 'border-red-500 bg-red-50'
-                      : 'border-gray-300 focus:border-blue-500'
-                  }`}
+                        ? 'border-red-500 bg-red-50'
+                        : 'border-gray-300 focus:border-blue-500'
+                    }`}
                 />
                 {validating && (
                   <div className="absolute right-3 top-3.5">
@@ -294,18 +279,17 @@ function IdentityContent() {
                     key={rel}
                     type="button"
                     onClick={() => setRelationship(rel)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-medium transition-all ${
-                      relationship === rel
+                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-medium transition-all ${relationship === rel
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                         : 'border-gray-300 hover:border-gray-400 text-gray-700'
-                    }`}
+                      }`}
                   >
                     <Heart className="w-4 h-4" />
                     <span>{rel}</span>
                   </button>
                 ))}
               </div>
-              
+
               {relationship === 'Other' && (
                 <div className="mt-3">
                   <input
@@ -376,11 +360,10 @@ function IdentityContent() {
               type="button"
               onClick={handleSubmit}
               disabled={!isFormValid || submitting}
-              className={`w-full py-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2 ${
-                isFormValid && !submitting
+              className={`w-full py-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2 ${isFormValid && !submitting
                   ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
                   : 'bg-gray-300 cursor-not-allowed'
-              }`}
+                }`}
             >
               {submitting ? (
                 <>

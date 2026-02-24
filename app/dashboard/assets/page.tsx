@@ -5,20 +5,34 @@ import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Edit2, Trash2, Users, Lock, Search, Filter, Download, Eye, Clock, Shield, FileText, Video, Key, Coins, FolderOpen, LayoutGrid, List, TrendingUp } from "lucide-react"
+import { Plus, Edit2, Trash2, Users, Lock, Search, Filter, Clock, Shield, FileText, Video, Key, Coins, FolderOpen, LayoutGrid, List, TrendingUp, Eye } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { API_ENDPOINTS, getAuthToken } from "@/lib/api-config"
+import { apiGet, apiDelete, apiPut } from "@/lib/api-client"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+
+interface NomineeInfo {
+  id: string
+  name: string
+  email: string
+  relationship: string
+}
 
 interface Asset {
   id: string
   name: string
   type: string
-  nominee: string
-  nomineeCount: number
-  inactivityPeriod: string
-  inactivityDaysRemaining: number
+  nominees: NomineeInfo[]
   createdAt: string
   status: "ACTIVE" | "PENDING_VERIFICATION" | "RELEASED"
   description?: string
+}
+
+interface UserProfile {
+  inactivityDays: number
+  lastLoginAt: string
 }
 
 export default function ViewAssetsPage() {
@@ -30,57 +44,93 @@ export default function ViewAssetsPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("list")
 
+  // Edit state — ONLY description (no nominee editing)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
+  const [editDescription, setEditDescription] = useState("")
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+
   useEffect(() => {
     const fetchAssets = async () => {
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        if (!user.id) return;
+      const token = getAuthToken();
+      if (!token) return;
 
-        try {
-            const response = await fetch(`http://localhost:8080/api/assets/user/${user.id}`);
-            if (response.ok) {
-                const data = await response.json();
-                // Map backend Asset entity to your frontend Asset interface
-                const mappedAssets = data.map((item: any) => ({
-                    id: item.id,
-                    name: item.fileName,
-                    type: item.fileType,
-                    nominee: item.assignedNominee?.name || "Multiple",
-                    status: item.isReleased ? "RELEASED" : "ACTIVE",
-                    createdAt: new Date(item.uploadedAt).toLocaleDateString(),
-                    inactivityDaysRemaining: 180 // Default placeholder
-                }));
-                setAssets(mappedAssets);
-                setFilteredAssets(mappedAssets);
-            }
-        } catch (error) {
-            console.error("Error loading assets:", error);
-        } finally {
-            setLoading(false);
+      try {
+        const response = await apiGet<any[]>(API_ENDPOINTS.assets.list);
+        if (response.success) {
+          const data = response.data || [];
+          const mappedAssets: Asset[] = data.map((item: any) => ({
+            id: item.id,
+            name: item.fileName,
+            type: item.fileType || "File",
+            nominees: (item.nominees || []).map((n: any) => ({
+              id: n.id,
+              name: n.name,
+              email: n.email,
+              relationship: n.relationship || ""
+            })),
+            status: (item.isReleased ? "RELEASED" : "ACTIVE") as "ACTIVE" | "PENDING_VERIFICATION" | "RELEASED",
+            createdAt: new Date(item.uploadedAt).toLocaleDateString(),
+            description: item.description
+          }));
+          setAssets(mappedAssets);
+          setFilteredAssets(mappedAssets);
         }
+      } catch (error) {
+        console.error("Error loading assets:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchUserProfile = async () => {
+      try {
+        const response = await apiGet<any>(API_ENDPOINTS.users.profile);
+        if (response.success && response.data) {
+          setUserProfile({
+            inactivityDays: response.data.inactivityDays || 180,
+            lastLoginAt: response.data.lastLoginAt
+          });
+        }
+      } catch (error) {
+        console.error("Error loading user profile:", error);
+      }
     };
 
     fetchAssets();
-}, []);
+    fetchUserProfile();
+  }, []);
+
+  // Calculate remaining inactivity days dynamically from user profile
+  const calculateRemainingDays = (): number => {
+    if (!userProfile || !userProfile.lastLoginAt) return 0;
+    const lastLogin = new Date(userProfile.lastLoginAt);
+    const now = new Date();
+    const daysSinceLogin = Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24));
+    const remaining = (userProfile.inactivityDays || 180) - daysSinceLogin;
+    return Math.max(0, remaining);
+  };
+
+  const inactivityDaysRemaining = calculateRemainingDays();
+  const inactivityPeriod = userProfile ? `${userProfile.inactivityDays} days` : "—";
 
   // Filter and search logic
   useEffect(() => {
     let filtered = [...assets]
 
-    // Search filter
     if (searchQuery) {
-      filtered = filtered.filter(asset => 
+      filtered = filtered.filter(asset =>
         asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         asset.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        asset.nominee.toLowerCase().includes(searchQuery.toLowerCase())
+        asset.nominees.some(n => n.name.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     }
 
-    // Type filter
     if (filterType !== "all") {
       filtered = filtered.filter(asset => asset.type === filterType)
     }
 
-    // Status filter
     if (filterStatus !== "all") {
       filtered = filtered.filter(asset => asset.status === filterStatus)
     }
@@ -88,9 +138,48 @@ export default function ViewAssetsPage() {
     setFilteredAssets(filtered)
   }, [searchQuery, filterType, filterStatus, assets])
 
-  const handleDelete = (id: string) => {
+  // Edit — ONLY description
+  const handleEdit = (asset: Asset) => {
+    setEditingAsset(asset);
+    setEditDescription(asset.description || "");
+    setIsEditModalOpen(true);
+  }
+
+  const handleUpdate = async () => {
+    if (!editingAsset) return;
+    setIsUpdating(true);
+    try {
+      const url = `${API_ENDPOINTS.assets.update(editingAsset.id)}?description=${encodeURIComponent(editDescription)}`;
+      const response = await apiPut(url, {});
+
+      if (response.success) {
+        setAssets(assets.map(a => a.id === editingAsset.id ? {
+          ...a,
+          description: editDescription
+        } : a));
+        setIsEditModalOpen(false);
+      } else {
+        alert(response.error || "Failed to update asset");
+      }
+    } catch (error) {
+      console.error("Update error:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this asset?")) {
-      setAssets(assets.filter((asset) => asset.id !== id))
+      try {
+        const response = await apiDelete(API_ENDPOINTS.assets.delete(id));
+        if (response.success) {
+          setAssets(assets.filter((asset) => asset.id !== id))
+        } else {
+          alert(response.error || "Failed to delete asset");
+        }
+      } catch (error) {
+        console.error("Delete error:", error);
+      }
     }
   }
 
@@ -135,13 +224,22 @@ export default function ViewAssetsPage() {
     return { color: "text-green-600 dark:text-green-400", label: "Healthy" }
   }
 
+  // Format nominees for display
+  const getNomineeDisplay = (nominees: NomineeInfo[]) => {
+    if (!nominees || nominees.length === 0) return "Not Assigned";
+    return nominees.map(n => n.name).join(", ");
+  }
+
   // Statistics
+  const allNominees = new Set(assets.flatMap(a => a.nominees.map(n => n.id)));
   const stats = {
     total: assets.length,
     active: assets.filter(a => a.status === "ACTIVE").length,
     pending: assets.filter(a => a.status === "PENDING_VERIFICATION").length,
-    nominees: assets.reduce((sum, a) => sum + a.nomineeCount, 0)
+    nominees: allNominees.size
   }
+
+  const urgency = getUrgencyLevel(inactivityDaysRemaining)
 
   return (
     <div className="space-y-6">
@@ -149,7 +247,7 @@ export default function ViewAssetsPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Your Digital Assets</h1>
-          <p className="text-muted-foreground">Manage all your secured digital assets and nominees</p>
+          <p className="text-muted-foreground">Manage all your secured digital assets. Nominee assignment is handled from <Link href="/dashboard/nominees" className="text-primary hover:underline font-medium">Manage Nominees</Link>.</p>
         </div>
         <Link href="/dashboard/add-asset">
           <Button className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground w-full md:w-auto shadow-lg hover:shadow-xl transition-all">
@@ -171,7 +269,7 @@ export default function ViewAssetsPage() {
               <Shield className="w-8 h-8 text-primary opacity-20" />
             </div>
           </Card>
-          
+
           <Card className="p-4 border-l-4 border-l-green-500 bg-gradient-to-br from-green-500/5 to-transparent">
             <div className="flex items-center justify-between">
               <div>
@@ -181,7 +279,7 @@ export default function ViewAssetsPage() {
               <TrendingUp className="w-8 h-8 text-green-500 opacity-20" />
             </div>
           </Card>
-          
+
           <Card className="p-4 border-l-4 border-l-yellow-500 bg-gradient-to-br from-yellow-500/5 to-transparent">
             <div className="flex items-center justify-between">
               <div>
@@ -191,7 +289,7 @@ export default function ViewAssetsPage() {
               <Clock className="w-8 h-8 text-yellow-500 opacity-20" />
             </div>
           </Card>
-          
+
           <Card className="p-4 border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-500/5 to-transparent">
             <div className="flex items-center justify-between">
               <div>
@@ -204,11 +302,44 @@ export default function ViewAssetsPage() {
         </div>
       )}
 
+      {/* Inactivity Info Banner */}
+      {!loading && assets.length > 0 && userProfile && (
+        <Card className="p-4 border border-border bg-gradient-to-r from-primary/5 to-accent/5">
+          <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Clock className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Inactivity Period</p>
+                <p className="text-lg font-bold text-foreground">{inactivityPeriod}</p>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-border hidden md:block" />
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Shield className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Days Remaining</p>
+                <p className={`text-lg font-bold ${urgency.color}`}>
+                  {inactivityDaysRemaining} days
+                  <span className={`text-xs ml-2 px-2 py-0.5 rounded-full border ${urgency.color}`}>{urgency.label}</span>
+                </p>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-border hidden md:block" />
+            <p className="text-xs text-muted-foreground flex-1">
+              This is user-level. If you don't login for {inactivityPeriod}, your nominees will be notified for verification. Login regularly to reset the countdown.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* Search and Filters */}
       {!loading && assets.length > 0 && (
         <Card className="p-4 border border-border">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -219,7 +350,6 @@ export default function ViewAssetsPage() {
               />
             </div>
 
-            {/* Type Filter */}
             <Select value={filterType} onValueChange={setFilterType}>
               <SelectTrigger className="w-full md:w-[180px]">
                 <Filter className="w-4 h-4 mr-2" />
@@ -235,7 +365,6 @@ export default function ViewAssetsPage() {
               </SelectContent>
             </Select>
 
-            {/* Status Filter */}
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Status" />
@@ -248,7 +377,6 @@ export default function ViewAssetsPage() {
               </SelectContent>
             </Select>
 
-            {/* View Toggle */}
             <div className="flex gap-2">
               <Button
                 variant={viewMode === "list" ? "default" : "outline"}
@@ -267,7 +395,6 @@ export default function ViewAssetsPage() {
             </div>
           </div>
 
-          {/* Active Filters Display */}
           {(searchQuery || filterType !== "all" || filterStatus !== "all") && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
               <p className="text-sm text-muted-foreground">Active filters:</p>
@@ -338,8 +465,6 @@ export default function ViewAssetsPage() {
           </Card>
         ) : (
           filteredAssets.map((asset) => {
-            const urgency = getUrgencyLevel(asset.inactivityDaysRemaining)
-            
             return viewMode === "grid" ? (
               // Grid View
               <Card
@@ -367,17 +492,20 @@ export default function ViewAssetsPage() {
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Nominees:</span>
-                      <span className="font-medium flex items-center gap-1">
-                        <Users className="w-3 h-3" />
-                        {asset.nomineeCount}
+                      <span className="font-medium flex items-center gap-1 truncate max-w-[140px]" title={getNomineeDisplay(asset.nominees)}>
+                        <Users className="w-3 h-3 flex-shrink-0" />
+                        {asset.nominees.length > 0 ? `${asset.nominees.length} assigned` : "None"}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Days Left:</span>
-                      <span className={`font-medium ${urgency.color}`}>
-                        {asset.inactivityDaysRemaining}
-                      </span>
-                    </div>
+                    {asset.nominees.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {asset.nominees.map(n => (
+                          <span key={n.id} className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
+                            {n.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2 pt-2">
@@ -385,7 +513,7 @@ export default function ViewAssetsPage() {
                       <Eye className="w-3 h-3 mr-1" />
                       View
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => handleEdit(asset)}>
                       <Edit2 className="w-3 h-3 mr-1" />
                       Edit
                     </Button>
@@ -423,23 +551,33 @@ export default function ViewAssetsPage() {
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <p className="text-muted-foreground text-xs">Nominees</p>
-                        <p className="text-foreground flex items-center gap-1 mt-1 font-medium">
-                          <Users className="w-4 h-4" />
-                          {asset.nomineeCount}
-                        </p>
+                        <p className="text-muted-foreground text-xs">Assigned Nominees</p>
+                        {asset.nominees.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {asset.nominees.map(n => (
+                              <span key={n.id} className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
+                                {n.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-foreground flex items-center gap-1 mt-1 font-medium text-muted-foreground">
+                            <Users className="w-4 h-4" />
+                            Not Assigned
+                          </p>
+                        )}
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs">Inactivity Period</p>
-                        <p className="text-foreground font-medium mt-1">{asset.inactivityPeriod}</p>
+                        <p className="text-foreground font-medium mt-1">{inactivityPeriod}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground text-xs">Days Remaining</p>
                         <div className="flex items-center gap-2 mt-1">
                           <p className={`font-medium ${urgency.color}`}>
-                            {asset.inactivityDaysRemaining}
+                            {inactivityDaysRemaining}
                           </p>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${urgency.color} bg-current bg-opacity-10`}>
+                          <span className={`text-xs px-1.5 py-0.5 rounded border ${urgency.color}`}>
                             {urgency.label}
                           </span>
                         </div>
@@ -458,17 +596,20 @@ export default function ViewAssetsPage() {
                   </div>
 
                   <div className="flex gap-2 md:flex-col">
+                    <Link href="/dashboard/nominees">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 md:flex-none border-border hover:bg-muted bg-transparent"
+                      >
+                        <Users className="w-4 h-4 md:mr-2" />
+                        <span className="hidden md:inline">Manage Nominees</span>
+                      </Button>
+                    </Link>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1 md:flex-none border-border hover:bg-muted bg-transparent"
-                    >
-                      <Users className="w-4 h-4 md:mr-2" />
-                      <span className="hidden md:inline">Manage Nominees</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
+                      onClick={() => handleEdit(asset)}
                       className="flex-1 md:flex-none border-border hover:bg-muted bg-transparent"
                     >
                       <Edit2 className="w-4 h-4 md:mr-2" />
@@ -501,12 +642,71 @@ export default function ViewAssetsPage() {
             <div>
               <h4 className="font-semibold text-foreground mb-2">Asset Security Information</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                All assets are encrypted and stored securely using military-grade encryption. Nominees will be invited for verification after the inactivity period is triggered. They must complete identity verification and approve access before receiving assets. You can manage multiple nominees per asset for added security.
+                All assets are encrypted and stored securely using military-grade encryption. Nominees will be invited for verification after the inactivity period is triggered. They must complete identity verification and approve access before receiving assets. You can manage multiple nominees per asset from the <Link href="/dashboard/nominees" className="text-primary hover:underline font-medium">Manage Nominees</Link> section.
               </p>
             </div>
           </div>
         </Card>
       )}
+
+      {/* Edit Asset Modal — ONLY description editing */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Asset Description</DialogTitle>
+            <DialogDescription>
+              Update the description for this asset. To manage nominees, use the <strong>Manage Nominees</strong> section.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 py-4">
+            <div className="grid gap-2">
+              <Label>Asset Name</Label>
+              <p className="text-sm text-foreground font-medium bg-muted/50 px-3 py-2 rounded-md">{editingAsset?.name}</p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Enter asset description..."
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+
+            {editingAsset && editingAsset.nominees.length > 0 && (
+              <div className="grid gap-2">
+                <Label>Current Nominees</Label>
+                <div className="flex flex-wrap gap-2">
+                  {editingAsset.nominees.map(n => (
+                    <span key={n.id} className="text-xs px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 font-medium">
+                      {n.name} ({n.email})
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  To change nominees, go to <Link href="/dashboard/nominees" className="text-primary hover:underline">Manage Nominees</Link>.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              disabled={isUpdating}
+              className="bg-gradient-to-r from-primary to-accent text-primary-foreground"
+            >
+              {isUpdating ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

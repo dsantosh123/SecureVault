@@ -1,0 +1,23 @@
+[33mcommit 2c78259eca2953899062a725103ef28f9e1f9a1b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: dsantosh123 <sdonapurge@gmail.com>
+Date:   Thu Jan 22 20:02:14 2026 +0530
+
+    Finish forgot password
+
+[33mcommit 4a20a0db7f49719a67e39ec5abfcc7d4b777479c[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: dsantosh123 <sdonapurge@gmail.com>
+Date:   Thu Jan 22 12:38:03 2026 +0530
+
+    final login page updated
+
+[33mcommit 041057d5f34c0a4bfe44ce98229fb793efa6910b[m
+Author: dsantosh123 <sdonapurge@gmail.com>
+Date:   Thu Jan 22 12:23:48 2026 +0530
+
+    Fix authentication logic and clean repository
+
+[33mcommit 0d36d6b0b4da55c94de13a5daf661f0b6b22b72c[m
+Author: dsantosh123 <sdonapurge@gmail.com>
+Date:   Tue Jan 20 16:32:09 2026 +0530
+
+    frontend upload

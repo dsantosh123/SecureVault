@@ -13,14 +13,18 @@ export interface ApiResponse<T> {
 export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const token = getAuthToken()
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
   }
 
-  // if (token) {
-  //   headers["Authorization"] = `Bearer ${token}`
-  // }
+  // Only set application/json if not FormData
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json"
+  }
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -29,14 +33,34 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
     })
 
     if (response.status === 401) {
-      // Token expired, clear and redirect to login
-      localStorage.removeItem("authToken")
-      localStorage.removeItem("user")
-      window.location.href = "/login"
+      console.error(`❌ [API Client] 401 Unauthorized for ${endpoint}`);
+      // Token expired, clear and redirect to appropriate login
+      const isAdminPage = typeof window !== "undefined" && window.location.pathname.startsWith("/admin")
+      if (isAdminPage) {
+        console.log("🔄 [API Client] Redirecting to /admin/login");
+        localStorage.removeItem("adminToken")
+        localStorage.removeItem("adminEmail")
+        window.location.href = "/admin/login"
+      } else {
+        console.log("🔄 [API Client] Redirecting to /login");
+        localStorage.removeItem("authToken")
+        localStorage.removeItem("user")
+        window.location.href = "/login"
+      }
       return { success: false, error: "Unauthorized" }
     }
 
-    const data = await response.json()
+    const text = await response.text();
+    let data: any = {};
+
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.warn("Failed to parse response as JSON:", text);
+        data = { message: text };
+      }
+    }
 
     if (!response.ok) {
       return {
@@ -69,22 +93,22 @@ export function apiGet<T>(endpoint: string, options: RequestInit = {}) {
 /**
  * Make a POST request
  */
-export function apiPost<T>(endpoint: string, body?: unknown, options: RequestInit = {}) {
+export function apiPost<T>(endpoint: string, body?: any, options: RequestInit = {}) {
   return apiRequest<T>(endpoint, {
     ...options,
     method: "POST",
-    body: body ? JSON.stringify(body) : undefined,
+    body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
   })
 }
 
 /**
  * Make a PUT request
  */
-export function apiPut<T>(endpoint: string, body?: unknown, options: RequestInit = {}) {
+export function apiPut<T>(endpoint: string, body?: any, options: RequestInit = {}) {
   return apiRequest<T>(endpoint, {
     ...options,
     method: "PUT",
-    body: body ? JSON.stringify(body) : undefined,
+    body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
   })
 }
 

@@ -2,24 +2,9 @@ spring:
   application:
     name: securevault-backend
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/securevault
-    username: postgres
-    password: postgres
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        jdbc:
-          batch_size: 20
-          time_zone: UTC
-        order_inserts: true
-        order_updates: true
+  data:
+    mongodb:
+      uri: mongodb+srv://securevaultauth_db_user1:Shreya2019@cluster0.zhxojsi.mongodb.net/securevault?retryWrites=true&w=majority
 
   jackson:
     time-zone: UTC
@@ -62,9 +47,6 @@ cors:
   allowed-headers: Content-Type,Authorization
   max-age: 3600
 
-storage:
-  upload-dir: uploads/
-
 app:
   name: SecureVault
   version: 1.0.0
@@ -80,5 +62,5 @@ otp:
 logging:
   level:
     org.springframework.security: INFO
-    org.hibernate.SQL: DEBUG
-    org.springframework.mail: DEBUG  # ✅ ADD THIS to see email logs
+    org.springframework.data.mongodb: DEBUG
+    org.springframework.mail: DEBUG
